@@ -35,3 +35,4 @@ def test_epoch(autoencoder, test_loader, device):
 
     test_loss /= len(test_loader.dataset)
     print("====> Test set loss: {:.4f}".format(test_loss))
+    return test_loss

@@ -1,14 +1,10 @@
-import sys
-
 import torch
 import torch.utils.data
 from torch import nn, optim
 from torch.nn import functional as F
 
 from data_loader import get_data_loaders
-from architectures import CNN_Decoder, CNN_Encoder
-
-sys.path.append("../")
+from models.layers import CNN_Decoder, CNN_Encoder
 
 
 class Network(nn.Module):
