@@ -14,18 +14,22 @@ from models.autoencoder import Autoencoder
 from train_utils import test_epoch, train_epoch
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg: DictConfig):
-    os.makedirs(cfg.logger.results_path, exist_ok=True)
+def initialize_model(args: DictConfig):
+    if args.model.type == "AE":
+        model = Autoencoder(args)
+    else:
+        raise NotImplementedError("Model type not implemented")
+    return model
 
-    torch.manual_seed(cfg.system.seed)
 
-    ae = Autoencoder(cfg)
-    architectures = {"AE": ae}
-    autoenc = architectures[cfg.model.type]
+def train(args: DictConfig, model: torch.nn.Module):
+    os.makedirs(args.logger.results_path, exist_ok=True)
+    os.makedirs(args.logger.checkpoint_path, exist_ok=True)
 
-    train_autoencoder(cfg, autoenc)
-    draw_interpolation_grid(cfg, autoenc)
+    torch.manual_seed(args.system.seed)
+
+    train_autoencoder(args, model)
+    draw_interpolation_grid(args, model)
 
 
 def train_autoencoder(args: DictConfig, autoenc):
@@ -41,8 +45,19 @@ def train_autoencoder(args: DictConfig, autoenc):
         test_epoch(autoenc, autoenc.test_loader, autoenc.device)
         # test_loss = test_epoch(autoenc, autoenc.test_loader, autoenc.device)
 
-        memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
+        # save checkpoint
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": autoenc.model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": args,  # Saving the config used for this training run
+        }
+        checkpoint_path = "{}/{}_{}_checkpoint_epoch_{}.pt".format(
+            args.logger.checkpoint_path, args.model.type, args.dataset.name, epoch
+        )
+        torch.save(checkpoint, checkpoint_path)
 
+        memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
         # Pseudocode for wandb logging
         # wandb.log({
         #     "epoch": epoch,
@@ -88,6 +103,12 @@ def draw_interpolation_grid(args, autoenc):
         "{}/animation_{}_{}.gif".format(args.logger.results_path, args.model.type, args.dataset.name),
         interpolations.astype(np.uint8),
     )
+
+
+@hydra.main(version_base=None, config_path="configs", config_name="config")
+def main(cfg: DictConfig):
+    model = initialize_model(cfg)
+    train(cfg, model)
 
 
 if __name__ == "__main__":

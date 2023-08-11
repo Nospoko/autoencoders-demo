@@ -9,6 +9,7 @@ model:
 
 logger:
   results_path: "results/"
+  checkpoint_path: "checkpoints/"
 
 system:
   no_cuda: False
