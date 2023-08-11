@@ -10,10 +10,10 @@ from models.layers import CNN_Decoder, CNN_Encoder
 class Network(nn.Module):
     def __init__(self, args):
         super(Network, self).__init__()
-        output_size = args.embedding_size
+        output_size = args.model.embedding_size
         self.encoder = CNN_Encoder(output_size)
 
-        self.decoder = CNN_Decoder(args.embedding_size)
+        self.decoder = CNN_Decoder(args.model.embedding_size)
 
     def encode(self, x):
         return self.encoder(x)
@@ -29,7 +29,7 @@ class Network(nn.Module):
 class Autoencoder(object):
     def __init__(self, args):
         self.args = args
-        self.device = torch.device("cuda" if args.cuda else "cpu")
+        self.device = torch.device("cuda" if not args.system.no_cuda and torch.cuda.is_available() else "cpu")
 
         self.train_loader, self.test_loader = get_data_loaders(args)
 

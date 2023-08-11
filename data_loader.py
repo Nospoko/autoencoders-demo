@@ -8,11 +8,11 @@ def get_data_loaders(args):
     """
     Returns the data loaders for the dataset specified in args.dataset
     """
-    if args.dataset == "MNIST":
+    if args.dataset.name == "MNIST":
         data = load_dataset("mnist")
-    elif args.dataset == "AmbiguousMNIST":
+    elif args.dataset.name == "AmbiguousMNIST":
         data = load_dataset("mweiss/mnist_ambiguous")
-    elif args.dataset == "FashionMNIST":
+    elif args.dataset.name == "FashionMNIST":
         data = load_dataset("fashion_mnist")
     else:
         print("Dataset not supported")
@@ -21,7 +21,7 @@ def get_data_loaders(args):
     data["train"].set_format("torch", columns=["image"])
     data["test"].set_format("torch", columns=["image"])
 
-    train_loader = torch.utils.data.DataLoader(data["train"], batch_size=args.batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(data["test"], batch_size=args.batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(data["train"], batch_size=args.hyperparameters.batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(data["test"], batch_size=args.hyperparameters.batch_size, shuffle=False)
 
     return train_loader, test_loader
