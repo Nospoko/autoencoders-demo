@@ -9,6 +9,7 @@ import numpy as np
 from omegaconf import DictConfig
 from torchvision.utils import save_image
 
+import wandb
 from utils import get_interpolations
 from models.autoencoder import Autoencoder
 from train_utils import test_epoch, train_epoch
@@ -33,17 +34,14 @@ def train(args: DictConfig, model: torch.nn.Module):
 
 
 def train_autoencoder(args: DictConfig, autoenc):
-    # Pseudocode for wandb initialization, since I'm not sure how it works yet
-    # wandb.init(project='autoencoder', config=args)
-
     total_start_time = time.time()
     process = psutil.Process()
 
     optimizer = torch.optim.Adam(autoenc.model.parameters(), lr=1e-3)
     for epoch in range(1, args.hyperparameters.epochs + 1):
         train_epoch(autoenc, autoenc.train_loader, optimizer, autoenc.device, args.hyperparameters.log_interval, epoch)
-        test_epoch(autoenc, autoenc.test_loader, autoenc.device)
-        # test_loss = test_epoch(autoenc, autoenc.test_loader, autoenc.device)
+        # test_epoch(autoenc, autoenc.test_loader, autoenc.device)
+        test_loss = test_epoch(autoenc, autoenc.test_loader, autoenc.device)
 
         # save checkpoint
         checkpoint = {
@@ -58,20 +56,14 @@ def train_autoencoder(args: DictConfig, autoenc):
         torch.save(checkpoint, checkpoint_path)
 
         memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
+
         # Pseudocode for wandb logging
-        # wandb.log({
-        #     "epoch": epoch,
-        #     "test_loss": test_loss,
-        #     "memory_usage": memory_usage
-        # })
+        wandb.log({"epoch": epoch, "test_loss": test_loss, "memory_usage": memory_usage})
 
     total_end_time = time.time()
     total_training_time = total_end_time - total_start_time
-    # placeholder for wandb logging
-    print("Total training time: {}".format(total_training_time) + " seconds")
-    print("Memory usage: {}".format(memory_usage) + " MB")
-    # Pseudocode for wandb logging
-    # wandb.log({"total_training_time": total_training_time})
+
+    wandb.log({"total_training_time": total_training_time})
 
 
 @torch.no_grad()
@@ -107,6 +99,8 @@ def draw_interpolation_grid(args, autoenc):
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
+    wandb.init(project="autoencoder", config=cfg)
+
     model = initialize_model(cfg)
     train(cfg, model)
 
