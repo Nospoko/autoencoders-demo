@@ -38,10 +38,7 @@ architectures = {"AE": ae}
 print(args.model)
 
 if __name__ == "__main__":
-    try:
-        os.stat(args.results_path)
-    except FileNotFoundError:
-        os.mkdir(args.results_path)
+    os.mkdirs(args.results_path, exist_ok=True)
 
     try:
         autoenc = architectures[args.model]
