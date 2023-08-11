@@ -10,6 +10,7 @@ model:
 logger:
   results_path: "results/"
   checkpoint_path: "checkpoints/"
+  enable_wandb: False
 
 system:
   no_cuda: False

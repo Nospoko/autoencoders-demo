@@ -3,7 +3,7 @@ import torch
 from train import initialize_model, draw_interpolation_grid
 
 # change the path to the checkpoint you want to test
-checkpoint_path = "checkpoints/AE_MNIST_checkpoint_epoch_3.pt"
+checkpoint_path = "checkpoints/..."
 checkpoint = torch.load(checkpoint_path)
 
 autoencoder_instance = initialize_model(checkpoint["config"])

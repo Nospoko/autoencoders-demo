@@ -14,6 +14,10 @@ def get_data_loaders(args):
         data = load_dataset("mweiss/mnist_ambiguous")
     elif args.dataset.name == "FashionMNIST":
         data = load_dataset("fashion_mnist")
+    elif args.dataset.name == "CIFAR10":
+        data = load_dataset("cifar10")
+        data["train"] = data["train"].rename_column("img", "image")
+        data["test"] = data["test"].rename_column("img", "image")
     else:
         print("Dataset not supported")
         sys.exit()

@@ -10,10 +10,14 @@ from models.layers import CNN_Decoder, CNN_Encoder
 class Network(nn.Module):
     def __init__(self, args):
         super(Network, self).__init__()
+        self.args = args
         output_size = args.model.embedding_size
-        self.encoder = CNN_Encoder(output_size)
-
-        self.decoder = CNN_Decoder(args.model.embedding_size)
+        if args.dataset.name == "CIFAR10":
+            self.encoder = CNN_Encoder(output_size, input_size=(3, 32, 32))
+            self.decoder = CNN_Decoder(args.model.embedding_size, input_size=(3, 32, 32))
+        else:
+            self.encoder = CNN_Encoder(output_size)
+            self.decoder = CNN_Decoder(args.model.embedding_size)
 
     def encode(self, x):
         return self.encoder(x)
@@ -22,7 +26,10 @@ class Network(nn.Module):
         return self.decoder(z)
 
     def forward(self, x):
-        z = self.encode(x.view(-1, 784))
+        if self.args.dataset.name == "CIFAR10":
+            z = self.encode(x.view(-1, 3 * 32 * 32))
+        else:
+            z = self.encode(x.view(-1, 28 * 28))
         return self.decode(z)
 
 
@@ -38,5 +45,8 @@ class Autoencoder(object):
         self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
 
     def loss_function(self, recon_x, x):
-        BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction="sum")
+        if self.args.dataset.name == "CIFAR10":
+            BCE = F.binary_cross_entropy(recon_x.view(-1, 3 * 32 * 32), x.view(-1, 3 * 32 * 32), reduction="sum")
+        else:
+            BCE = F.binary_cross_entropy(recon_x, x.view(-1, 28 * 28), reduction="sum")
         return BCE

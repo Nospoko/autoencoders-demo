@@ -58,12 +58,14 @@ def train_autoencoder(args: DictConfig, autoenc):
         memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
 
         # Pseudocode for wandb logging
-        wandb.log({"epoch": epoch, "test_loss": test_loss, "memory_usage": memory_usage})
+        if args.logger.enable_wandb:
+            wandb.log({"epoch": epoch, "test_loss": test_loss, "memory_usage": memory_usage})
 
     total_end_time = time.time()
     total_training_time = total_end_time - total_start_time
 
-    wandb.log({"total_training_time": total_training_time})
+    if args.logger.enable_wandb:
+        wandb.log({"total_training_time": total_training_time})
 
 
 @torch.no_grad()
@@ -75,21 +77,26 @@ def draw_interpolation_grid(args, autoenc):
     images_per_row = 16
     interpolations = get_interpolations(args, autoenc.model, autoenc.device, images, images_per_row)
 
+    img_dim = images.shape[-2]
+    channels = 3 if img_dim == 32 else 1
     sample = torch.randn(64, args.model.embedding_size).to(autoenc.device)
     sample = autoenc.model.decode(sample).cpu()
 
-    # Save the images and interpolations
+    # Adjust the reshape based on channels and img_dim
     save_image(
-        sample.view(64, 1, 28, 28), "{}/sample_{}_{}.png".format(args.logger.results_path, args.model.type, args.dataset.name)
+        sample.view(64, channels, img_dim, img_dim),
+        "{}/sample_{}_{}.png".format(args.logger.results_path, args.model.type, args.dataset.name),
     )
     save_image(
-        interpolations.view(-1, 1, 28, 28),
+        interpolations.view(-1, channels, img_dim, img_dim),
         "{}/interpolations_{}_{}.png".format(args.logger.results_path, args.model.type, args.dataset.name),
         nrow=images_per_row,
     )
 
     interpolations = interpolations.cpu()
-    interpolations = np.reshape(interpolations.data.numpy(), (-1, 28, 28))
+    interpolations = np.reshape(interpolations.data.numpy(), (-1, img_dim, img_dim, channels))
+    if channels == 1:  # Convert grayscale to RGB for gif
+        interpolations = np.repeat(interpolations, 3, axis=-1)
     interpolations *= 256
     imageio.mimsave(
         "{}/animation_{}_{}.gif".format(args.logger.results_path, args.model.type, args.dataset.name),
@@ -99,7 +106,8 @@ def draw_interpolation_grid(args, autoenc):
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
-    wandb.init(project="autoencoder", config=cfg)
+    if cfg.logger.enable_wandb:
+        wandb.init(project="autoencoder", config=cfg)
 
     model = initialize_model(cfg)
     train(cfg, model)
