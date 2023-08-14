@@ -16,9 +16,8 @@ from models.autoencoder import Autoencoder
 from train_utils import test_epoch, train_epoch, prepare_loss_function
 
 
-def initialize_model(cfg: DictConfig, train_loader, test_loader):
+def initialize_model(cfg: DictConfig, train_loader, test_loader, input_size):
     if cfg.model.type == "AE":
-        input_size = (3, 32, 32) if cfg.dataset.name == "CIFAR10" else (1, 28, 28)
         model = Autoencoder(cfg, train_loader=train_loader, test_loader=test_loader, input_size=input_size)
     else:
         raise NotImplementedError("Model type not implemented")
@@ -112,8 +111,8 @@ def draw_interpolation_grid(cfg, autoenc):
 def main(cfg: DictConfig):
     if cfg.logger.enable_wandb:
         wandb.init(project="autoencoder", config=cfg)
-    train_loader, test_loader = get_data_loaders(cfg)
-    model = initialize_model(cfg, train_loader, test_loader)
+    train_loader, test_loader, input_size = get_data_loaders(cfg)
+    model = initialize_model(cfg, train_loader, test_loader, input_size)
 
     loss_function = prepare_loss_function(cfg.train)
     train(cfg, model, loss_function)
