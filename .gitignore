@@ -4,3 +4,5 @@ results/
 outputs/
 checkpoints/
 wandb/
+tests/
+ecgdata/
