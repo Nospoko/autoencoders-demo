@@ -11,42 +11,46 @@ from torchvision.utils import save_image
 
 import wandb
 from utils import get_interpolations
+from data_loader import get_data_loaders
 from models.autoencoder import Autoencoder
-from train_utils import test_epoch, train_epoch
+from train_utils import test_epoch, train_epoch, prepare_loss_function
 
 
-def initialize_model(cfg: DictConfig):
+def initialize_model(cfg: DictConfig, train_loader, test_loader):
     if cfg.model.type == "AE":
-        model = Autoencoder(cfg)
+        input_size = (3, 32, 32) if cfg.dataset.name == "CIFAR10" else (1, 28, 28)
+        model = Autoencoder(cfg, train_loader=train_loader, test_loader=test_loader, input_size=input_size)
     else:
         raise NotImplementedError("Model type not implemented")
     return model
 
 
-def train(cfg: DictConfig, autoencoder: Autoencoder):
+def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
     os.makedirs(cfg.logger.results_path, exist_ok=True)
     os.makedirs(cfg.logger.checkpoint_path, exist_ok=True)
 
     torch.manual_seed(cfg.system.seed)
 
-    train_autoencoder(cfg, autoencoder)
+    train_autoencoder(cfg, autoencoder, loss_function)
     draw_interpolation_grid(cfg, autoencoder)
 
 
-def train_autoencoder(cfg: DictConfig, autoenc):
+def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
     total_start_time = time.time()
     process = psutil.Process()
 
-    optimizer = torch.optim.Adam(autoenc.model.parameters(), lr=cfg.train.lr)
+    optimizer = torch.optim.Adam(autoencoder.model.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
-        train_epoch(autoenc, autoenc.train_loader, optimizer, autoenc.device, cfg.train.log_interval, epoch)
+        train_epoch(
+            autoencoder, autoencoder.train_loader, optimizer, autoencoder.device, cfg.train.log_interval, epoch, loss_function
+        )
         # test_epoch(autoenc, autoenc.test_loader, autoenc.device)
-        test_loss = test_epoch(autoenc, autoenc.test_loader, autoenc.device)
+        test_loss = test_epoch(autoencoder, autoencoder.test_loader, autoencoder.device, loss_function)
 
         # save checkpoint
         checkpoint = {
             "epoch": epoch,
-            "model_state_dict": autoenc.model.state_dict(),
+            "model_state_dict": autoencoder.model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Saving the config used for this training run
         }
@@ -108,9 +112,11 @@ def draw_interpolation_grid(cfg, autoenc):
 def main(cfg: DictConfig):
     if cfg.logger.enable_wandb:
         wandb.init(project="autoencoder", config=cfg)
+    train_loader, test_loader = get_data_loaders(cfg)
+    model = initialize_model(cfg, train_loader, test_loader)
 
-    model = initialize_model(cfg)
-    train(cfg, model)
+    loss_function = prepare_loss_function(cfg.train)
+    train(cfg, model, loss_function)
 
 
 if __name__ == "__main__":
