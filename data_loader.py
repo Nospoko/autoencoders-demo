@@ -25,7 +25,7 @@ def get_data_loaders(args):
     data["train"].set_format("torch", columns=["image"])
     data["test"].set_format("torch", columns=["image"])
 
-    train_loader = torch.utils.data.DataLoader(data["train"], batch_size=args.hyperparameters.batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(data["test"], batch_size=args.hyperparameters.batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(data["train"], batch_size=args.train.batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(data["test"], batch_size=args.train.batch_size, shuffle=False)
 
     return train_loader, test_loader

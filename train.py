@@ -38,8 +38,8 @@ def train_autoencoder(args: DictConfig, autoenc):
     process = psutil.Process()
 
     optimizer = torch.optim.Adam(autoenc.model.parameters(), lr=1e-3)
-    for epoch in range(1, args.hyperparameters.epochs + 1):
-        train_epoch(autoenc, autoenc.train_loader, optimizer, autoenc.device, args.hyperparameters.log_interval, epoch)
+    for epoch in range(1, args.train.epochs + 1):
+        train_epoch(autoenc, autoenc.train_loader, optimizer, autoenc.device, args.train.log_interval, epoch)
         # test_epoch(autoenc, autoenc.test_loader, autoenc.device)
         test_loss = test_epoch(autoenc, autoenc.test_loader, autoenc.device)
 
