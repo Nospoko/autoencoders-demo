@@ -28,7 +28,7 @@ def initialize_model(cfg: DictConfig, train_loader, test_loader, input_size):
     return model
 
 
-def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
+def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, test_loader):
     os.makedirs(cfg.logger.results_path, exist_ok=True)
     os.makedirs(cfg.logger.checkpoint_path, exist_ok=True)
 
@@ -36,6 +36,7 @@ def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Mod
 
     if cfg.model.type == "ECG_AE":
         train_ecg_autoencoder(cfg, autoencoder, loss_function)
+        visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
     else:
         train_autoencoder(cfg, autoencoder, loss_function)
         draw_interpolation_grid(cfg, autoencoder)
@@ -178,6 +179,8 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
         plt.plot(reconstructions[i, 1, :], label="Reconstructed Channel 1", color="orange", linestyle="--")
 
     plt.tight_layout(pad=5.0)
+    # save the plot
+    plt.savefig("{}/reconstructions_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name))
     plt.show()
 
 
@@ -190,7 +193,7 @@ def main(cfg: DictConfig):
     model = initialize_model(cfg, train_loader, test_loader, input_size)
 
     loss_function = prepare_loss_function(cfg.train)
-    train(cfg, model, loss_function)
+    train(cfg, model, loss_function, test_loader)
 
 
 if __name__ == "__main__":
