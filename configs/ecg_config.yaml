@@ -1,0 +1,22 @@
+train:
+  batch_size: 128
+  epochs: 1
+  log_interval: 50
+  lr: 0.001
+  loss_function: "MSE"
+
+model:
+  type: "ECG_AE"
+  embedding_size: 32
+
+logger:
+  results_path: "results/"
+  checkpoint_path: "checkpoints/"
+  enable_wandb: False
+
+system:
+  no_cuda: False
+  seed: 42
+
+dataset:
+  name: "ltafdb"
