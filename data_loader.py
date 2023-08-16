@@ -10,25 +10,24 @@ def get_data_loaders(cfg):
     """
     if cfg.dataset.name == "MNIST":
         data = load_dataset("mnist")
+        input_size = (1, 28, 28)
     elif cfg.dataset.name == "AmbiguousMNIST":
         data = load_dataset("mweiss/mnist_ambiguous")
+        input_size = (1, 28, 28)
     elif cfg.dataset.name == "FashionMNIST":
         data = load_dataset("fashion_mnist")
+        input_size = (1, 28, 28)
     elif cfg.dataset.name == "CIFAR10":
         data = load_dataset("cifar10")
         data["train"] = data["train"].rename_column("img", "image")
         data["test"] = data["test"].rename_column("img", "image")
+        input_size = (3, 32, 32)
     else:
         print("Dataset not supported")
         sys.exit()
 
     data["train"].set_format("torch", columns=["image"])
     data["test"].set_format("torch", columns=["image"])
-
-    input_size = tuple(data["train"][0]["image"].shape)
-    # swap channels to NCHW
-    input_size = (input_size[2], input_size[1], input_size[0])
-    print(input_size)
 
     train_loader = torch.utils.data.DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
