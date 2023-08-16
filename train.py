@@ -6,6 +6,8 @@ import torch
 import psutil
 import imageio
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 from omegaconf import DictConfig
 from torchvision.utils import save_image
 
@@ -146,10 +148,70 @@ def draw_interpolation_grid(cfg, autoenc):
     )
 
 
+@torch.no_grad()
+def visualize_ecg_reconstruction(cfg, autoenc, test_loader):
+    # Fetch a batch of ECG signals
+    record = next(iter(test_loader))
+    signal = record["signal"].to(autoenc.device)
+
+    # Get the reconstructed signal from the autoencoder
+    reconstructed_signal_batch = autoenc.model(signal)
+
+    fig, axes = plt.subplots(3, 2, figsize=(15, 12))  # Adjusting to 3 rows, 2 columns
+
+    # Just taking first 3 signals from the batch for visualization
+    for idx in range(3):
+        original_signal = signal[idx].cpu().numpy()
+        reconstructed_signal = reconstructed_signal_batch[idx].squeeze().cpu().numpy()
+
+        # Plot original and reconstructed signals on the left axis of the subplot
+        sns.lineplot(
+            x=range(len(original_signal[0])),
+            y=original_signal[0],
+            ax=axes[idx, 0],
+            label="Original Signal Channel 1",
+            color="blue",
+        )
+        sns.lineplot(
+            x=range(len(original_signal[1])),
+            y=original_signal[1],
+            ax=axes[idx, 0],
+            label="Original Signal Channel 2",
+            color="green",
+        )
+        sns.lineplot(
+            x=range(len(reconstructed_signal[0])),
+            y=reconstructed_signal[0],
+            ax=axes[idx, 0],
+            label="Reconstructed Signal Channel 1",
+            color="red",
+            linestyle="--",
+        )
+        sns.lineplot(
+            x=range(len(reconstructed_signal[1])),
+            y=reconstructed_signal[1],
+            ax=axes[idx, 0],
+            label="Reconstructed Signal Channel 2",
+            color="orange",
+            linestyle="--",
+        )
+        axes[idx, 0].set_title(f"Original vs Reconstructed Signal for Sample {idx+1}")
+
+        # Right axis just for original signal
+        sns.lineplot(x=range(len(original_signal[0])), y=original_signal[0], ax=axes[idx, 1], color="blue")
+        sns.lineplot(x=range(len(original_signal[1])), y=original_signal[1], ax=axes[idx, 1], color="green")
+        axes[idx, 1].set_title(f"Original Signal for Sample {idx+1}")
+
+    # axes[0, 0].legend() <- trying to make it look cleaner
+    plt.tight_layout()
+    plt.show()
+
+
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     if cfg.logger.enable_wandb:
         wandb.init(project="autoencoder", config=cfg)
+
     train_loader, test_loader, input_size = get_data_loaders(cfg)
     model = initialize_model(cfg, train_loader, test_loader, input_size)
 
