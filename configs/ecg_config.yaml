@@ -1,6 +1,6 @@
 train:
   batch_size: 128
-  epochs: 1
+  epochs: 10
   log_interval: 50
   lr: 0.001
   loss_function: "MSE"
