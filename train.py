@@ -13,12 +13,15 @@ import wandb
 from utils import get_interpolations
 from data_loader import get_data_loaders
 from models.autoencoder import Autoencoder
-from train_utils import test_epoch, train_epoch, prepare_loss_function
+from models.ECG_autoencoder import ECG_autoencoder
+from train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
 
 
 def initialize_model(cfg: DictConfig, train_loader, test_loader, input_size):
     if cfg.model.type == "AE":
         model = Autoencoder(cfg, train_loader=train_loader, test_loader=test_loader, input_size=input_size)
+    elif cfg.model.type == "ECG_AE":
+        model = ECG_autoencoder(cfg, train_loader=train_loader, test_loader=test_loader, input_size=input_size)
     else:
         raise NotImplementedError("Model type not implemented")
     return model
@@ -30,8 +33,44 @@ def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Mod
 
     torch.manual_seed(cfg.system.seed)
 
-    train_autoencoder(cfg, autoencoder, loss_function)
-    draw_interpolation_grid(cfg, autoencoder)
+    if cfg.model.type == "ECG_AE":
+        train_ecg_autoencoder(cfg, autoencoder, loss_function)
+    else:
+        train_autoencoder(cfg, autoencoder, loss_function)
+        draw_interpolation_grid(cfg, autoencoder)
+
+
+def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
+    total_start_time = time.time()
+    process = psutil.Process()
+
+    optimizer = torch.optim.Adam(autoencoder.model.parameters(), lr=cfg.train.lr)
+    for epoch in range(1, cfg.train.epochs + 1):
+        avg_loss = train_epoch_ecg(
+            autoencoder, autoencoder.train_loader, optimizer, autoencoder.device, cfg.train.log_interval, epoch, loss_function
+        )
+        avg_test_loss = test_epoch_ecg(autoencoder, autoencoder.test_loader, autoencoder.device, loss_function)
+
+        # save checkpoint
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": autoencoder.model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": cfg,  # Saving the config used for this training run
+        }
+        checkpoint_path = "{}/{}_{}_checkpoint_epoch_{}.pt".format(
+            cfg.logger.checkpoint_path, cfg.model.type, cfg.dataset.name, epoch
+        )
+        torch.save(checkpoint, checkpoint_path)
+
+        memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
+
+        if cfg.logger.enable_wandb:
+            wandb.log({"epoch": epoch, "test_loss": avg_test_loss, "train_loss": avg_loss, "memory_usage": memory_usage})
+
+    total_time = time.time() - total_start_time
+    if cfg.logger.enable_wandb:
+        wandb.log({"total_time": total_time})
 
 
 def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
