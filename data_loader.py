@@ -22,6 +22,12 @@ def get_data_loaders(cfg):
         data["train"] = data["train"].rename_column("img", "image")
         data["test"] = data["test"].rename_column("img", "image")
         input_size = (3, 32, 32)
+    elif cfg.dataset.name == "ltafdb":
+        data = load_dataset("roszcz/ecg-segmentation-ltafdb")
+        input_size = (2, 1000)
+        data["train"].set_format("torch", columns=["signal"])
+        data["test"].set_format("torch", columns=["signal"])
+        return data["train"], data["test"], input_size
     else:
         print("Dataset not supported")
         sys.exit()

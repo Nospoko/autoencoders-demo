@@ -121,3 +121,47 @@ class CNN_Decoder(nn.Module):
         x = x.view(-1, self.fc_output_dim, 1, 1)
         x = self.deconv(x)
         return x  # We removed the flattening view at the end
+
+
+class ECG_Encoder(nn.Module):
+    def __init__(self, output_size, input_size):
+        super(ECG_Encoder, self).__init__()
+
+        # Assuming input_size = (channels, sequence_length)
+        self.channels, self.seq_length = input_size
+
+        self.layers = nn.Sequential(
+            nn.Conv1d(self.channels, 16, kernel_size=3, stride=2, padding=1),  # [batch, 16, seq_length/2]
+            nn.ReLU(),
+            nn.Conv1d(16, 32, kernel_size=3, stride=2, padding=1),  # [batch, 32, seq_length/4]
+            nn.ReLU(),
+            nn.Conv1d(32, 64, kernel_size=3, stride=2, padding=1),  # [batch, 64, seq_length/8]
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(64 * self.seq_length // 8, output_size),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class ECG_Decoder(nn.Module):
+    def __init__(self, embedding_size, input_size):
+        super(ECG_Decoder, self).__init__()
+
+        self.channels, self.seq_length = input_size
+
+        self.layers = nn.Sequential(
+            nn.Linear(embedding_size, 64 * self.seq_length // 8),
+            nn.ReLU(),
+            nn.Unflatten(1, (64, self.seq_length // 8)),
+            nn.ConvTranspose1d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose1d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU(),
+            nn.ConvTranspose1d(16, self.channels, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.Tanh(),  # Adjust this activation based on the nature of your input data
+        )
+
+    def forward(self, z):
+        return self.layers(z)
