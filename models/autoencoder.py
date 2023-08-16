@@ -28,7 +28,7 @@ class Network(nn.Module):
 class Autoencoder(object):
     def __init__(self, cfg, train_loader, test_loader, input_size):
         self.cfg = cfg
-        self.device = torch.device("cuda" if not cfg.system.no_cuda and torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if cfg.system.cuda and torch.cuda.is_available() else "cpu")
         self.train_loader = train_loader
         self.test_loader = test_loader
 

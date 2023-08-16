@@ -15,8 +15,10 @@ logger:
   enable_wandb: False
 
 system:
-  no_cuda: False
+  cuda: False
   seed: 42
 
 dataset:
   name: "MNIST"
+
+run_date: ${now:%Y_%m_%d_%H_%M}

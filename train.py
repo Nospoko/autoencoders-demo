@@ -6,8 +6,8 @@ import torch
 import psutil
 import imageio
 import numpy as np
-from omegaconf import DictConfig
 from torchvision.utils import save_image
+from omegaconf import OmegaConf, DictConfig
 
 import wandb
 from utils import get_interpolations
@@ -31,7 +31,6 @@ def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Mod
     torch.manual_seed(cfg.system.seed)
 
     train_autoencoder(cfg, autoencoder, loss_function)
-    draw_interpolation_grid(cfg, autoencoder)
 
 
 def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module):
@@ -41,10 +40,17 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
     optimizer = torch.optim.Adam(autoencoder.model.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
         train_epoch(
-            autoencoder, autoencoder.train_loader, optimizer, autoencoder.device, cfg.train.log_interval, epoch, loss_function
+            autoencoder=autoencoder,
+            loader=autoencoder.train_loader,
+            optimizer=optimizer,
+            device=autoencoder.device,
+            log_interval=cfg.train.log_interval,
+            epoch=epoch,
+            loss_function=loss_function,
         )
-        # test_epoch(autoenc, autoenc.test_loader, autoenc.device)
-        test_loss = test_epoch(autoencoder, autoencoder.test_loader, autoencoder.device, loss_function)
+        test_loss = test_epoch(
+            autoencoder=autoencoder, test_loader=autoencoder.test_loader, device=autoencoder.device, loss_function=loss_function
+        )
 
         # save checkpoint
         checkpoint = {
@@ -62,7 +68,7 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
 
         # Pseudocode for wandb logging
         if cfg.logger.enable_wandb:
-            wandb.log({"epoch": epoch, "test_loss": test_loss, "memory_usage": memory_usage})
+            wandb.log({"epoch": epoch, "test/loss": test_loss, "memory_usage": memory_usage})
 
     total_end_time = time.time()
     total_training_time = total_end_time - total_start_time
@@ -110,12 +116,19 @@ def draw_interpolation_grid(cfg, autoenc):
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     if cfg.logger.enable_wandb:
-        wandb.init(project="autoencoder", config=cfg)
+        name = f"{cfg.dataset.name}_{cfg.run_date}"
+        wandb.init(
+            project="autoencoder",
+            name=name,
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
     train_loader, test_loader, input_size = get_data_loaders(cfg)
-    model = initialize_model(cfg, train_loader, test_loader, input_size)
+    autoencoder = initialize_model(cfg, train_loader, test_loader, input_size)
 
     loss_function = prepare_loss_function(cfg.train)
-    train(cfg, model, loss_function)
+    train(cfg, autoencoder, loss_function)
+
+    draw_interpolation_grid(cfg, autoencoder)
 
 
 if __name__ == "__main__":
