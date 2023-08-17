@@ -1,6 +1,20 @@
-# autoencoders-demo
+# Autoencoders-demo
 
 This repository contains a demo of autoencoders. [Source](https://github.com/dariocazzani/pytorch-AE)
+
+## How to run
+
+```sh
+python train.py --config-name <config>
+```
+
+where `<config>` is a .yaml file in the `configs` folder.
+- `config.yaml` for MNIST/CIFAR10 images
+
+## Expected results
+**MNIST**:
+
+![expected result](screenshots/expected.png)
 
 ### Code Style
 
