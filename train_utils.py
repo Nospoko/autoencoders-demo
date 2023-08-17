@@ -2,7 +2,7 @@ import torch
 
 
 def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function):
-    autoencoder.model.train()
+    autoencoder.train()
     train_loss = 0
 
     for batch_idx, batch in enumerate(train_loader):
@@ -17,7 +17,7 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
             data = data.unsqueeze(1)
 
         optimizer.zero_grad()
-        recon_batch = autoencoder.model(data)
+        recon_batch = autoencoder(data)
 
         loss = loss_function(recon_batch, data)
         loss.backward()
@@ -35,14 +35,17 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
                 )
             )
 
+    train_loss /= len(train_loader.dataset)
+    return train_loss
+
 
 def test_epoch(autoencoder, test_loader, device, loss_function):
-    autoencoder.model.eval()
+    autoencoder.eval()
     test_loss = 0
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
             data = batch["image"].to(device) / 255.0
-            recon_batch = autoencoder.model(data)
+            recon_batch = autoencoder(data)
             # ordering issue
             if len(data.shape) == 4:
                 # permute chanel order to NCHW from NHWC
@@ -65,52 +68,3 @@ def prepare_loss_function(train_cfg):
         return torch.nn.MSELoss(reduction="sum")
 
     raise ValueError("Invalid loss function: {}. Available options are: 'BCE', 'MSE'.".format(train_cfg.loss_function))
-
-
-def train_epoch_ecg(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, verbose=True):
-    autoencoder.model.train()
-    train_loss = 0
-
-    for batch_idx, batch in enumerate(train_loader):
-        data = batch["signal"].to(device)
-        optimizer.zero_grad()
-        recon_batch = autoencoder.model(data)
-
-        loss = loss_function(recon_batch, data)
-        loss.backward()
-        train_loss += loss.item()
-        optimizer.step()
-
-        if verbose and batch_idx % log_interval == 0:
-            print(
-                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
-                    epoch,
-                    batch_idx * len(data),
-                    len(train_loader.dataset),
-                    100.0 * batch_idx / len(train_loader),
-                    train_loss / (batch_idx + 1),
-                )
-            )
-
-    avg_loss = train_loss / len(train_loader)
-    return avg_loss
-
-
-def test_epoch_ecg(autoencoder, test_loader, device, loss_function, verbose=True):
-    autoencoder.model.eval()
-    test_loss = 0
-
-    with torch.no_grad():
-        for batch_idx, batch in enumerate(test_loader):
-            data = batch["signal"].to(device)
-            recon_batch = autoencoder.model(data)
-
-            loss = loss_function(recon_batch, data)
-            test_loss += loss.item()
-
-    avg_loss = test_loss / len(test_loader)
-
-    if verbose:
-        print(f"====> Test set loss: {avg_loss:.4f}")
-
-    return avg_loss
