@@ -37,7 +37,8 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
 
     optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
-        train_epoch(
+        start_time = time.time()
+        train_loss = train_epoch(
             autoencoder=autoencoder,
             train_loader=train_loader,
             optimizer=optimizer,
@@ -66,10 +67,36 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
         torch.save(checkpoint, checkpoint_path)
 
         memory_usage = process.memory_info().rss / (1024 * 1024)  # in megabytes
+        end_time = time.time()
+        epoch_duration = end_time - start_time  # in megabytes
+        # Get CPU utilization
+        cpu_utilization = psutil.cpu_percent()
 
-        # Pseudocode for wandb logging
+        # Get GPU utilization (assuming you're using NVIDIA GPUs and torch.cuda is available)
+        if torch.cuda.is_available():
+            gpu_util = torch.cuda.max_memory_allocated() / torch.cuda.get_device_properties(0).total_memory
+            gpu_util *= 100  # Convert to percentage
+        else:
+            gpu_util = 0
+
+        # Accessing the first convolutional layer of the encoder
+        first_layer = autoencoder.encoder.conv[0]
+
+        # Getting the weights of the first convolutional layer
+        sample_weights = first_layer.weight.detach().cpu().numpy().flatten()
+
         if cfg.logger.enable_wandb:
-            wandb.log({"epoch": epoch, "test/loss": test_loss, "memory_usage": memory_usage})
+            wandb.log(
+                {
+                    "train/loss": train_loss,
+                    "test/loss": test_loss,
+                    "memory_usage": memory_usage,
+                    "epoch_duration": epoch_duration,
+                    "cpu_utilization": cpu_utilization,
+                    "gpu_utilization": gpu_util,
+                    "sample_weights": wandb.Histogram(sample_weights),
+                }
+            )
 
     total_end_time = time.time()
     total_training_time = total_end_time - total_start_time

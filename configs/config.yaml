@@ -12,10 +12,10 @@ model:
 logger:
   results_path: "results/"
   checkpoint_path: "checkpoints/"
-  enable_wandb: False
+  enable_wandb: True
 
 system:
-  cuda: False
+  cuda: True
   seed: 42
 
 dataset:

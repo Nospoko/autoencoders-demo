@@ -35,6 +35,9 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
                 )
             )
 
+    train_loss /= len(train_loader.dataset)
+    return train_loss
+
 
 def test_epoch(autoencoder, test_loader, device, loss_function):
     autoencoder.eval()
