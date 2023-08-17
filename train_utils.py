@@ -2,7 +2,7 @@ import torch
 
 
 def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function):
-    autoencoder.model.train()
+    autoencoder.train()
     train_loss = 0
 
     for batch_idx, batch in enumerate(train_loader):
@@ -17,7 +17,7 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
             data = data.unsqueeze(1)
 
         optimizer.zero_grad()
-        recon_batch = autoencoder.model(data)
+        recon_batch = autoencoder(data)
 
         loss = loss_function(recon_batch, data)
         loss.backward()
@@ -37,12 +37,12 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
 
 
 def test_epoch(autoencoder, test_loader, device, loss_function):
-    autoencoder.model.eval()
+    autoencoder.eval()
     test_loss = 0
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
             data = batch["image"].to(device) / 255.0
-            recon_batch = autoencoder.model(data)
+            recon_batch = autoencoder(data)
             # ordering issue
             if len(data.shape) == 4:
                 # permute chanel order to NCHW from NHWC
