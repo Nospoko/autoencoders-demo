@@ -1,6 +1,7 @@
 import torch
 
-from train import initialize_model, draw_interpolation_grid
+from train import initialize_model
+from visualizations import draw_interpolation_grid
 
 # change the path to the checkpoint you want to test
 checkpoint_path = "checkpoints/..."
