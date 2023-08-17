@@ -4,17 +4,13 @@ import time
 import hydra
 import torch
 import psutil
-import imageio
-import numpy as np
-import matplotlib.pyplot as plt
 from omegaconf import DictConfig
-from torchvision.utils import save_image
 
 import wandb
-from utils import get_interpolations
 from data_loader import get_data_loaders
 from models.autoencoder import Autoencoder
 from models.ECG_autoencoder import ECG_autoencoder
+from visualizations import draw_interpolation_grid, visualize_ecg_reconstruction
 from train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
 
 
@@ -110,78 +106,6 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
 
     if cfg.logger.enable_wandb:
         wandb.log({"total_training_time": total_training_time})
-
-
-@torch.no_grad()
-def draw_interpolation_grid(cfg, autoenc):
-    for batch in autoenc.test_loader:
-        images = batch["image"].to(autoenc.device) / 255.0
-        break  # Get the first batch for visualization purposes
-
-    images_per_row = 16
-    interpolations = get_interpolations(cfg, autoenc.model, autoenc.device, images, images_per_row)
-
-    img_dim = images.shape[-2]
-    channels = 3 if img_dim == 32 else 1
-    sample = torch.randn(64, cfg.model.embedding_size).to(autoenc.device)
-    sample = autoenc.model.decode(sample).cpu()
-
-    # Adjust the reshape based on channels and img_dim
-    save_image(
-        sample.view(64, channels, img_dim, img_dim),
-        "{}/sample_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
-    )
-    save_image(
-        interpolations.view(-1, channels, img_dim, img_dim),
-        "{}/interpolations_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
-        nrow=images_per_row,
-    )
-
-    interpolations = interpolations.cpu()
-    interpolations = np.reshape(interpolations.data.numpy(), (-1, img_dim, img_dim, channels))
-    if channels == 1:  # Convert grayscale to RGB for gif
-        interpolations = np.repeat(interpolations, 3, axis=-1)
-    interpolations *= 256
-    imageio.mimsave(
-        "{}/animation_{}_{}.gif".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
-        interpolations.astype(np.uint8),
-    )
-
-
-@torch.no_grad()
-def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
-    # Getting a single batch from the test_loader
-    for batch in test_loader:
-        signals = batch["signal"].to(autoencoder.device)
-        break  # Use only the first batch for visualization
-
-    # Pass the original signals through the autoencoder
-    reconstructions = autoencoder.model(signals)
-
-    # Convert to CPU for visualization
-    signals = signals.cpu().numpy()
-    reconstructions = reconstructions.cpu().numpy()
-
-    # Number of samples to visualize
-    num_samples = 4
-
-    plt.figure(figsize=(20, 6 * num_samples))
-
-    for i in range(num_samples):
-        # Channel 0
-        plt.subplot(num_samples, 2, 2 * i + 1)
-        plt.plot(signals[i, 0, :], label="Original Channel 0", color="blue")
-        plt.plot(reconstructions[i, 0, :], label="Reconstructed Channel 0", color="red", linestyle="--")
-
-        # Channel 1
-        plt.subplot(num_samples, 2, 2 * i + 2)
-        plt.plot(signals[i, 1, :], label="Original Channel 1", color="green")
-        plt.plot(reconstructions[i, 1, :], label="Reconstructed Channel 1", color="orange", linestyle="--")
-
-    plt.tight_layout(pad=5.0)
-    # save the plot
-    plt.savefig("{}/reconstructions_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name))
-    plt.show()
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

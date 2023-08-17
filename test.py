@@ -1,10 +1,11 @@
 import torch
 
+from train import initialize_model
 from data_loader import get_data_loaders
-from train import initialize_model, visualize_ecg_reconstruction
+from visualizations import visualize_ecg_reconstruction
 
 # change the path to the checkpoint you want to test
-checkpoint_path = "checkpoints/ECG_AE_ltafdb_checkpoint_epoch_10.pt"
+checkpoint_path = "checkpoints/ECG_AE_ltafdb_checkpoint_epoch_1.pt"
 checkpoint = torch.load(checkpoint_path)
 
 train_loader, test_loader, input_size = get_data_loaders(checkpoint["config"])
