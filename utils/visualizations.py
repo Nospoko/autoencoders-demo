@@ -89,3 +89,65 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
     # save the plot
     plt.savefig("{}/reconstructions_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name))
     plt.show()
+
+
+@torch.no_grad()
+def visualize_embedding(cfg, autoencoder, test_loader):
+    """
+    Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
+
+    :param cfg: The configuration dict.
+    :param autoencoder: The trained autoencoder model.
+    :param test_loader: The data loader for the test dataset.
+    """
+
+    found_labels = set()
+    label_to_image = {}
+
+    for idx in range(len(test_loader.dataset)):
+        image = test_loader.dataset["image"][idx]
+        label = test_loader.dataset["label"][idx]
+
+        if label not in found_labels:
+            label_to_image[label] = image
+            found_labels.add(label)
+
+        if len(found_labels) == 10:
+            break
+
+    fig, axs = plt.subplots(10, 3, figsize=(9, 30))
+
+    for idx, (label, image) in enumerate(label_to_image.items()):
+        image = image.float() / 255.0
+
+        # Create an embedding for the image
+        autoencoder.eval()  # set the model to evaluation mode
+        embedding = autoencoder.encode(image.unsqueeze(0).to(autoencoder.device))
+
+        # Calculate the padding for the embedding
+        embedding_size = embedding.size(1)
+        side_length = int(np.ceil(np.sqrt(embedding_size)))
+        padding_size = side_length * side_length - embedding_size
+
+        # Original image
+        axs[idx, 0].imshow(image.squeeze().numpy(), cmap="gray")
+        axs[idx, 0].set_title(f"Label {label} - Original Image")
+
+        # Embedding
+        padded_embedding = torch.nn.functional.pad(embedding, (0, padding_size), mode="constant", value=0)
+        image_embedding = padded_embedding.squeeze().detach().cpu().numpy().reshape(side_length, side_length)
+        axs[idx, 1].imshow(image_embedding, cmap="gray")
+        axs[idx, 1].set_title(f"Label {label} - Embedding")
+
+        # Reconstructed image
+        reconstructed_image = autoencoder.decode(embedding).squeeze().detach().cpu().numpy()
+        axs[idx, 2].imshow(reconstructed_image, cmap="gray")
+        axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
+
+        for j in range(3):
+            axs[idx, j].set_xticks([])
+            axs[idx, j].set_yticks([])
+
+    plt.tight_layout()
+    plt.savefig("{}/reconstructions_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name))
+    plt.show()
