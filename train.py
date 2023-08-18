@@ -10,8 +10,8 @@ import wandb
 from data_loader import get_data_loaders
 from models.autoencoder import Autoencoder
 from models.ECG_autoencoder import ECG_autoencoder
-from visualizations import draw_interpolation_grid, visualize_ecg_reconstruction
-from train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
+from utils.visualizations import draw_interpolation_grid, visualize_ecg_reconstruction
+from utils.train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
 
 
 def initialize_model(cfg: DictConfig, input_size):

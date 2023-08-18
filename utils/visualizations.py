@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from torchvision.utils import save_image
 
-from utils import get_interpolations
+from utils.utils import get_interpolations
 
 
 @torch.no_grad()
