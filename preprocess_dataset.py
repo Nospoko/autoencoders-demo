@@ -16,16 +16,16 @@ def create_embeddings(cfg, autoencoder, data_loader):
     :param autoencoder: autoencoder instance
     :param data_loader: data loader
     """
-    autoencoder_instance.eval()
-    autoencoder_instance.to(autoencoder_instance.device)
+    autoencoder.eval()
+    autoencoder.to(autoencoder.device)
     embeddings = []
     labels = []
 
     for batch_idx, batch in enumerate(data_loader):
-        data = batch["image"].float().to(autoencoder_instance.device) / 255.0
-        target = batch["label"].to(autoencoder_instance.device)
+        data = batch["image"].float().to(autoencoder.device) / 255.0
+        target = batch["label"].to(autoencoder.device)
 
-        embedding = autoencoder_instance.encode(data)
+        embedding = autoencoder.encode(data)
         embeddings.append(embedding.cpu().numpy())
         labels.append(target.cpu().numpy())
 
@@ -36,26 +36,54 @@ def create_embeddings(cfg, autoencoder, data_loader):
 
 
 if __name__ == "__main__":
-    checkpoint_path = "checkpoints/AE_MNIST_checkpoint_epoch_10.pt"
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint_path_list = [
+        "checkpoints/AE_MNIST_checkpoint_epoch_10_embSize_32.pt",
+        "checkpoints/AE_MNIST_checkpoint_epoch_10_embSize_16.pt",
+        "checkpoints/AE_MNIST_checkpoint_epoch_10_embSize_8.pt",
+    ]
+    test_embeddings_list = []
+    test_labels_list = []
+    train_embeddings_list = []
+    train_labels_list = []
 
+    # make sure the loaders are the same
+    checkpoint = torch.load(checkpoint_path_list[0])
     train_loader, test_loader, input_size = get_data_loaders(checkpoint["config"], return_targets=True)
 
-    autoencoder_instance = initialize_model(checkpoint["config"], input_size)
-    autoencoder_instance.load_state_dict(checkpoint["model_state_dict"])
+    for checkpoint_path in checkpoint_path_list:
+        if checkpoint_path != checkpoint_path_list[0]:
+            checkpoint = torch.load(checkpoint_path)
 
-    optimizer = torch.optim.Adam(autoencoder_instance.parameters(), checkpoint["config"].train.lr)
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        autoencoder_instance = initialize_model(checkpoint["config"], input_size)
+        autoencoder_instance.load_state_dict(checkpoint["model_state_dict"])
 
-    test_embeddings, test_labels = create_embeddings(checkpoint["config"], autoencoder_instance, test_loader)
+        optimizer = torch.optim.Adam(autoencoder_instance.parameters(), checkpoint["config"].train.lr)
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    train_embeddings, train_labels = create_embeddings(checkpoint["config"], autoencoder_instance, train_loader)
+        test_embeddings, test_labels = create_embeddings(checkpoint["config"], autoencoder_instance, test_loader)
+        test_embeddings_list.append(test_embeddings)
+        test_labels_list.append(test_labels)
+        train_embeddings, train_labels = create_embeddings(checkpoint["config"], autoencoder_instance, train_loader)
+        train_embeddings_list.append(train_embeddings)
+        train_labels_list.append(train_labels)
 
     DATASET_NAME = "SneakyInsect/MNIST-preprocessed"
     HUGGINGFACE_TOKEN = os.environ["HUGGINGFACE_TOKEN"]
 
-    test_data = {"image": test_loader.dataset["image"].numpy(), "label": test_labels, "embedding": test_embeddings}
-    train_data = {"image": train_loader.dataset["image"].numpy(), "label": train_labels, "embedding": train_embeddings}
+    test_data = {
+        "image": test_loader.dataset["image"].numpy(),
+        "label": test_labels,
+        "embedding32": test_embeddings_list[0],
+        "embedding16": test_embeddings_list[1],
+        "embedding8": test_embeddings_list[2],
+    }
+    train_data = {
+        "image": train_loader.dataset["image"].numpy(),
+        "label": train_labels,
+        "embedding32": train_embeddings_list[0],
+        "embedding16": train_embeddings_list[1],
+        "embedding8": train_embeddings_list[2],
+    }
     # print(test_data["image"].shape, test_data["label"].shape, test_data["embedding"].shape)
     # print(train_data["image"].shape, train_data["label"].shape, train_data["embedding"].shape)
     test_dataset = Dataset.from_dict(test_data)

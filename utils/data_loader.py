@@ -36,7 +36,7 @@ def get_data_loaders(cfg, return_targets=False):
         data["train"].set_format("torch", columns=columns_to_load)
         data["test"].set_format("torch", columns=columns_to_load)
 
-        train_loader = torch.utils.data.DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=cfg.train.shuffle)
         test_loader = torch.utils.data.DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
         return train_loader, test_loader, input_size
 

@@ -134,8 +134,8 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Saving the config used for this training run
         }
-        checkpoint_path = "{}/{}_{}_checkpoint_epoch_{}.pt".format(
-            cfg.logger.checkpoint_path, cfg.model.type, cfg.dataset.name, epoch
+        checkpoint_path = "{}/{}_{}_checkpoint_epoch_{}_embSize_{}.pt".format(
+            cfg.logger.checkpoint_path, cfg.model.type, cfg.dataset.name, epoch, cfg.model.embedding_size
         )
         torch.save(checkpoint, checkpoint_path)
 

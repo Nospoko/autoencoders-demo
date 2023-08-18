@@ -92,13 +92,14 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
 
 @torch.no_grad()
-def visualize_embedding(cfg, autoencoder, test_loader):
+def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     """
     Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
 
     :param cfg: The configuration dict.
     :param autoencoder: The trained autoencoder model.
     :param test_loader: The data loader for the test dataset.
+    :param num_trio: The number of trios to visualize.
     """
 
     found_labels = set()
@@ -112,10 +113,10 @@ def visualize_embedding(cfg, autoencoder, test_loader):
             label_to_image[label] = image
             found_labels.add(label)
 
-        if len(found_labels) == 10:
+        if len(found_labels) == num_trio:
             break
 
-    fig, axs = plt.subplots(10, 3, figsize=(9, 30))
+    fig, axs = plt.subplots(num_trio, 3, figsize=(9, 3 * num_trio))
 
     for idx, (label, image) in enumerate(label_to_image.items()):
         image = image.float() / 255.0
