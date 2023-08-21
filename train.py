@@ -10,6 +10,7 @@ import wandb
 from models.autoencoder import Autoencoder
 from utils.data_loader import get_data_loaders
 from models.ECG_autoencoder import ECG_autoencoder
+from models.variational_autoencoder import Variational_autoencoder
 from utils.visualizations import draw_interpolation_grid, visualize_ecg_reconstruction
 from utils.train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
 
@@ -19,6 +20,8 @@ def initialize_model(cfg: DictConfig, input_size):
         model = Autoencoder(cfg, input_size)
     elif cfg.model.type == "ECG_AE":
         model = ECG_autoencoder(cfg, input_size)
+    elif cfg.model.type == "VAE":
+        model = Variational_autoencoder(cfg, input_size)
     else:
         raise NotImplementedError("Model type not implemented")
     return model.to(model.device)
