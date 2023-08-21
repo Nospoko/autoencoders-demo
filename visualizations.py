@@ -63,7 +63,7 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
     # Convert list to tensor and pass through autoencoder
     to_plot_tensor = torch.stack(to_plot[:4])
-    reconstructions = autoencoder.model(to_plot_tensor)
+    reconstructions = autoencoder(to_plot_tensor)
 
     # Convert to CPU for visualization
     to_plot_tensor = to_plot_tensor.cpu().numpy()
