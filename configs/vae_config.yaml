@@ -1,6 +1,6 @@
 train:
   batch_size: 128
-  epochs: 10
+  epochs: 5
   log_interval: 10
   lr: 0.001
   loss_function: "VAE"
@@ -14,7 +14,7 @@ model:
 logger:
   results_path: "results/"
   checkpoint_path: "checkpoints/"
-  enable_wandb: True
+  enable_wandb: False
 
 system:
   cuda: True

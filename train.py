@@ -110,7 +110,6 @@ def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_functi
 def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
     total_start_time = time.time()
     process = psutil.Process()
-
     optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
         start_time = time.time()
@@ -181,6 +180,51 @@ def train_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: 
         wandb.log({"total_training_time": total_training_time})
 
 
+def train_multiple_models(cfg: DictConfig, range_begin: int, range_end: int, range_step: int):
+    os.makedirs(cfg.logger.checkpoint_path + "/multiple/", exist_ok=True)
+
+    for embedding_size in range(range_begin, range_end + 1, range_step):  # Loop through embedding sizes from 1 to 32
+        print(f"Training for embedding_size: {embedding_size}")
+
+        # Override the embedding_size in the original configuration
+        cfg.model.embedding_size = embedding_size
+
+        # Reinitialize everything for the new embedding_size
+        train_loader, test_loader, input_size = get_data_loaders(cfg)
+        autoencoder = initialize_model(cfg, input_size)
+
+        loss_function = prepare_loss_function(cfg.train)
+        optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
+
+        # Train for 5 epochs only
+        for epoch in range(1, cfg.train.epochs + 1):
+            train_epoch(
+                autoencoder,
+                train_loader,
+                optimizer,
+                autoencoder.device,
+                cfg.train.log_interval,
+                epoch,
+                loss_function,
+            )
+            test_epoch(
+                autoencoder,
+                test_loader,
+                autoencoder.device,
+                loss_function,
+            )
+
+        # Save only one checkpoint per model, after 5 epochs
+        checkpoint = {
+            "epoch": 5,
+            "model_state_dict": autoencoder.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": cfg,  # Save the config used for this run
+        }
+        checkpoint_path = f"{cfg.logger.checkpoint_path}/multiple/{cfg.model.type}_{cfg.dataset.name}_checkpoint_epoch_5_embSize_{embedding_size}.pt"
+        torch.save(checkpoint, checkpoint_path)
+
+
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def main(cfg: DictConfig):
     if cfg.logger.enable_wandb:
@@ -190,11 +234,18 @@ def main(cfg: DictConfig):
             name=name,
             config=OmegaConf.to_container(cfg, resolve=True),
         )
-    train_loader, test_loader, input_size = get_data_loaders(cfg)
-    autoencoder = initialize_model(cfg, input_size)
+    train_multiple = True
+    if train_multiple:
+        start = 1
+        end = 32
+        step = 1
+        train_multiple_models(cfg, start, end, step)
+    else:
+        train_loader, test_loader, input_size = get_data_loaders(cfg)
+        autoencoder = initialize_model(cfg, input_size)
 
-    loss_function = prepare_loss_function(cfg.train)
-    train(cfg, autoencoder, loss_function, train_loader, test_loader)
+        loss_function = prepare_loss_function(cfg.train)
+        train(cfg, autoencoder, loss_function, train_loader, test_loader)
 
     if cfg.model.type == "ECG_AE":
         visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
