@@ -8,7 +8,7 @@ from preprocess_dataset import create_embeddings
 from utils.visualizations import visualize_embedding
 
 # change the path to the checkpoint you want to test
-checkpoint_path = "checkpoints/AE_MNIST_checkpoint_epoch_10_embSize_8.pt"
+checkpoint_path = "checkpoints/AE_MNIST_checkpoint_epoch_10_embSize_32.pt"
 checkpoint = torch.load(checkpoint_path)
 
 train_loader, test_loader, input_size = get_data_loaders(checkpoint["config"], return_targets=True)

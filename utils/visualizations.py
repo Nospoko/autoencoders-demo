@@ -102,12 +102,15 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     :param num_trio: The number of trios to visualize.
     """
 
+    autoencoder.eval()  # Set the model to evaluation mode
+    autoencoder.to(autoencoder.device)
+
     found_labels = set()
     label_to_image = {}
 
     for idx in range(len(test_loader.dataset)):
-        image = test_loader.dataset["image"][idx]
-        label = test_loader.dataset["label"][idx]
+        image = test_loader.dataset[idx]["image"]
+        label = test_loader.dataset[idx]["label"]
 
         if label not in found_labels:
             label_to_image[label] = image
@@ -119,36 +122,37 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     fig, axs = plt.subplots(num_trio, 3, figsize=(9, 3 * num_trio))
 
     for idx, (label, image) in enumerate(label_to_image.items()):
-        image = image.float() / 255.0
+        image = image.float().to(autoencoder.device) / 255.0
 
-        # Create an embedding for the image
-        autoencoder.eval()  # set the model to evaluation mode
-        embedding = autoencoder.encode(image.unsqueeze(0).to(autoencoder.device))
+        if cfg.model.type == "VAE":
+            mu, logvar = autoencoder.encode(image.unsqueeze(0))
+            z = autoencoder.reparameterize(mu, logvar)
+        else:
+            z = autoencoder.encode(image.unsqueeze(0))
 
-        # Calculate the padding for the embedding
-        embedding_size = embedding.size(1)
-        side_length = int(np.ceil(np.sqrt(embedding_size)))
-        padding_size = side_length * side_length - embedding_size
+        reconstructed_image = autoencoder.decode(z).squeeze().cpu().numpy()
 
         # Original image
-        axs[idx, 0].imshow(image.squeeze().numpy(), cmap="gray")
-        axs[idx, 0].set_title(f"Label {label} - Original Image")
+        axs[idx, 0].imshow(image.cpu().squeeze().numpy(), cmap="gray")
+        axs[idx, 0].set_title(f"Label {label} - Original")
 
         # Embedding
-        padded_embedding = torch.nn.functional.pad(embedding, (0, padding_size), mode="constant", value=0)
-        image_embedding = padded_embedding.squeeze().detach().cpu().numpy().reshape(side_length, side_length)
-        axs[idx, 1].imshow(image_embedding, cmap="gray")
+        embedding_size = z.size(1)
+        side_length = int(np.ceil(np.sqrt(embedding_size)))
+        padding_needed = side_length * side_length - embedding_size
+
+        padded_z = torch.nn.functional.pad(z, (0, padding_needed), mode="constant", value=0)
+
+        axs[idx, 1].imshow(padded_z.cpu().squeeze().numpy().reshape(side_length, side_length), cmap="gray")
         axs[idx, 1].set_title(f"Label {label} - Embedding")
 
         # Reconstructed image
-        reconstructed_image = autoencoder.decode(embedding).squeeze().detach().cpu().numpy()
         axs[idx, 2].imshow(reconstructed_image, cmap="gray")
-        axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
+        axs[idx, 2].set_title(f"Label {label} - Reconstructed")
 
         for j in range(3):
-            axs[idx, j].set_xticks([])
-            axs[idx, j].set_yticks([])
+            axs[idx, j].axis("off")
 
     plt.tight_layout()
-    plt.savefig("{}/reconstructions_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name))
+    plt.savefig(f"{cfg.logger.results_path}/reconstructions_{cfg.model.type}_{cfg.dataset.name}.png")
     plt.show()
