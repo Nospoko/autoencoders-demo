@@ -1,5 +1,7 @@
 import torch
 
+from models.variational_autoencoder import VAELoss
+
 
 def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function):
     autoencoder.train()
@@ -8,18 +10,20 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
     for batch_idx, batch in enumerate(train_loader):
         data = batch["image"].to(device) / 255.0
 
-        # There is some issue with chanel ordering after introduction of cifar10
         if len(data.shape) == 4:
-            # permute chanel order to NCHW from NHWC
             data = data.permute(0, 3, 1, 2)
         if len(data.shape) == 3:
-            # add chanel dim
             data = data.unsqueeze(1)
 
         optimizer.zero_grad()
-        recon_batch = autoencoder(data)
 
-        loss = loss_function(recon_batch, data)
+        if isinstance(loss_function, VAELoss):
+            recon_batch, mu, logvar = autoencoder(data)
+            loss = loss_function(recon_batch, data, mu, logvar)
+        else:
+            recon_batch = autoencoder(data)
+            loss = loss_function(recon_batch, data)
+
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
@@ -45,16 +49,18 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
             data = batch["image"].to(device) / 255.0
-            recon_batch = autoencoder(data)
-            # ordering issue
+
             if len(data.shape) == 4:
-                # permute chanel order to NCHW from NHWC
                 data = data.permute(0, 3, 1, 2)
             if len(data.shape) == 3:
-                # add chanel dim
                 data = data.unsqueeze(1)
 
-            test_loss += loss_function(recon_batch, data).item()
+            if isinstance(loss_function, VAELoss):
+                recon_batch, mu, logvar = autoencoder(data)
+                test_loss += loss_function(recon_batch, data, mu, logvar).item()
+            else:
+                recon_batch = autoencoder(data)
+                test_loss += loss_function(recon_batch, data).item()
 
     test_loss /= len(test_loader.dataset)
     print("====> Test set loss: {:.4f}".format(test_loss))
@@ -66,8 +72,10 @@ def prepare_loss_function(train_cfg):
         return torch.nn.BCELoss(reduction="sum")
     elif train_cfg.loss_function == "MSE":
         return torch.nn.MSELoss(reduction="sum")
+    elif train_cfg.loss_function == "VAE":
+        return VAELoss()
 
-    raise ValueError("Invalid loss function: {}. Available options are: 'BCE', 'MSE'.".format(train_cfg.loss_function))
+    raise ValueError(f"Invalid loss function: {train_cfg.loss_function}. Available options are: 'BCE', 'MSE', 'VAE'.")
 
 
 def train_epoch_ecg(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, verbose=True):
