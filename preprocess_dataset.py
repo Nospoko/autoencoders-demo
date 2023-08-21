@@ -16,16 +16,16 @@ def create_embeddings(cfg, autoencoder, data_loader):
     :param autoencoder: autoencoder instance
     :param data_loader: data loader
     """
-    autoencoder_instance.eval()
-    autoencoder_instance.to(autoencoder_instance.device)
+    autoencoder.eval()
+    autoencoder.to(autoencoder.device)
     embeddings = []
     labels = []
 
     for batch_idx, batch in enumerate(data_loader):
-        data = batch["image"].float().to(autoencoder_instance.device) / 255.0
-        target = batch["label"].to(autoencoder_instance.device)
+        data = batch["image"].float().to(autoencoder.device) / 255.0
+        target = batch["label"].to(autoencoder.device)
 
-        embedding = autoencoder_instance.encode(data)
+        embedding = autoencoder.encode(data)
         embeddings.append(embedding.cpu().numpy())
         labels.append(target.cpu().numpy())
 
