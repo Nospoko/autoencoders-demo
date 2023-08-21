@@ -79,7 +79,7 @@ def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_functi
         else:
             gpu_util = 0
 
-        first_layer = autoencoder.encoder.conv[0]
+        first_layer = autoencoder.encoder.layers[0]
 
         # Getting the weights of the first convolutional layer
         sample_weights = first_layer.weight.detach().cpu().numpy().flatten()
