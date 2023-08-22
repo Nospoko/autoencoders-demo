@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from einops import reduce, rearrange
 from torch.nn import functional as F
 
 
@@ -208,12 +209,11 @@ class VectorQuantizer(nn.Module):
         self.m_i_ts = SonnetExponentialMovingAverage(decay, e_i_ts.shape)
 
     def forward(self, x):
-        flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
+        flat_x = rearrange(x, "b c h w -> b (h w) c")
         distances = (flat_x**2).sum(1, keepdim=True) - 2 * flat_x @ self.e_i_ts + (self.e_i_ts**2).sum(0, keepdim=True)
         encoding_indices = distances.argmin(1)
-        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1)).permute(
-            0, 3, 1, 2
-        )
+        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1))
+        quantized_x = rearrange(quantized_x, "b h w c -> b c h w")
 
         # See second term of Equation (3).
         if not self.use_ema:
@@ -232,16 +232,16 @@ class VectorQuantizer(nn.Module):
 
                 # Cluster counts.
                 encoding_one_hots = F.one_hot(encoding_indices, self.num_embeddings).type(flat_x.dtype)
-                n_i_ts = encoding_one_hots.sum(0)
+                n_i_ts = reduce(encoding_one_hots, "b n -> n", "sum")
                 # Updated exponential moving average of the cluster counts.
                 # See Equation (6).
                 self.N_i_ts(n_i_ts)
 
                 # Exponential moving average of the embeddings. See Equation (7).
-                embed_sums = flat_x.transpose(0, 1) @ encoding_one_hots
+                embed_sums = reduce(flat_x, "b n c -> n c", "sum", n=encoding_one_hots)
                 self.m_i_ts(embed_sums)
 
-                # This is kind of weird.
+                # This is kind of weird. <- comment from the original code.
                 # Compare: https://github.com/deepmind/sonnet/blob/v2/sonnet/src/nets/vqvae.py#L270
                 # and Equation (8).
                 N_i_ts_sum = self.N_i_ts.average.sum()
