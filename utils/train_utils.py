@@ -125,3 +125,65 @@ def test_epoch_ecg(autoencoder, test_loader, device, loss_function, verbose=True
         print(f"====> Test set loss: {avg_loss:.4f}")
 
     return avg_loss
+
+
+def train_epoch_vqvae(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, beta):
+    autoencoder.train()
+    total_train_loss = 0
+    total_recon_error = 0
+    n_train = 0
+    for batch_idx, train_tensors in enumerate(train_loader):
+        optimizer.zero_grad()
+
+        imgs = train_tensors["image"].to(device) / 255.0
+        imgs = imgs.permute(0, 3, 1, 2)
+
+        out = autoencoder(imgs)
+        recon_error = loss_function(out["x_recon"], imgs)  # Assuming that loss_function is MSE Loss
+        total_recon_error += recon_error.item()
+        loss = recon_error + beta * out["commitment_loss"]  # cfg.train.beta is the configurable beta term
+
+        if "dictionary_loss" in out and out["dictionary_loss"] is not None:
+            loss += out["dictionary_loss"]
+
+        total_train_loss += loss.item()
+        loss.backward()
+        optimizer.step()
+        n_train += 1
+
+        if (batch_idx + 1) % log_interval == 0:
+            avg_train_loss = total_train_loss / n_train
+            avg_recon_error = total_recon_error / n_train
+            print(
+                f"Train Epoch: {epoch} [{batch_idx * len(imgs)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]"
+            )
+            print(f"Avg Train Loss: {avg_train_loss}")
+            print(f"Avg Recon Error: {avg_recon_error}")
+
+            total_train_loss = 0
+            total_recon_error = 0
+            n_train = 0
+    return avg_train_loss
+
+
+def test_epoch_vqvae(autoencoder, test_loader, device, loss_function, beta):
+    autoencoder.eval()
+    total_test_loss = 0
+    n_test = 0
+    with torch.no_grad():
+        for batch_idx, test_tensors in enumerate(test_loader):
+            imgs = test_tensors["image"].to(device) / 255.0  # Adjust as needed
+            imgs = imgs.permute(0, 3, 1, 2)
+            out = autoencoder(imgs)
+            recon_error = loss_function(out["x_recon"], imgs)
+            loss = recon_error + beta * out["commitment_loss"]
+
+            if "dictionary_loss" in out and out["dictionary_loss"] is not None:
+                loss += out["dictionary_loss"]
+
+            total_test_loss += loss.item()
+            n_test += 1
+
+    avg_test_loss = total_test_loss / n_test
+    print(f"====> Test set loss: {avg_test_loss:.4f}")
+    return avg_test_loss

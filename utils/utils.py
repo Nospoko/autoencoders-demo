@@ -13,7 +13,7 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
             alpha = np.linspace(0, 1, num_interps + 2)
             interps = []
             for a in alpha:
-                interps.append(a * t2.view(1, -1) + (1 - a) * t1.view(1, -1))
+                interps.append(a * t2.reshape(1, -1) + (1 - a) * t1.reshape(1, -1))
             return torch.cat(interps, 0)
 
         if cfg.model.type == "VAE":

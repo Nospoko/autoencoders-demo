@@ -7,7 +7,7 @@ train:
   shuffle: True
 
 model:
-  type: "AE"
+  type: "VQ-VAE"
   embedding_size: 32
 
 logger:
@@ -20,18 +20,19 @@ system:
   seed: 42
 
 dataset:
-  name: "MNIST"
+  name: "CIFAR10"
 
 vqvae:
-    in_channels: 3,
-    num_hiddens: 128,
-    num_downsampling_layers: 2,
-    num_residual_layers: 2,
-    num_residual_hiddens: 32,
-    embedding_dim: 64,
-    num_embeddings: 512,
-    use_ema: use_ema,
-    decay: 0.99,
-    epsilon: 1e-5,
+    in_channels: 3
+    num_hiddens: 128
+    num_downsampling_layers: 2
+    num_residual_layers: 2
+    num_residual_hiddens: 32
+    embedding_dim: 32
+    num_embeddings: 512
+    use_ema: True
+    decay: 0.99
+    epsilon: 1e-5
+    beta: 0.25
 
 run_date: ${now:%Y_%m_%d_%H_%M}

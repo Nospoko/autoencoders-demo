@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from einops import reduce, rearrange
 from torch.nn import functional as F
 
 
@@ -100,29 +99,48 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        num_hiddens,
-        num_downsampling_layers,
-        num_residual_layers,
-        num_residual_hiddens,
-        embedding_dim,
-        num_embeddings,
-        use_ema,
-        decay,
-        epsilon,
-    ):
+    def __init__(self, cfg, device):
         super().__init__()
+
+        in_channels = cfg.in_channels
+        num_hiddens = cfg.num_hiddens
+        num_downsampling_layers = cfg.num_downsampling_layers
+        num_residual_layers = cfg.num_residual_layers
+        num_residual_hiddens = cfg.num_residual_hiddens
+        embedding_dim = cfg.embedding_dim
+        num_embeddings = cfg.num_embeddings
+        use_ema = cfg.use_ema
+        decay = cfg.decay
+        epsilon = cfg.epsilon
+
+        self.device = torch.device("cuda" if device and torch.cuda.is_available() else "cpu")
 
         # Define layers in __init__
         self.encoder_layer = self.build_encoder(
-            in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens
+            in_channels,
+            num_hiddens,
+            num_downsampling_layers,
+            num_residual_layers,
+            num_residual_hiddens,
         )
-        self.pre_vq_conv_layer = nn.Conv2d(in_channels=num_hiddens, out_channels=embedding_dim, kernel_size=1)
-        self.vector_quantizer = self.build_vector_quantizer(embedding_dim, num_embeddings, use_ema, decay, epsilon)
+        self.pre_vq_conv_layer = nn.Conv2d(
+            in_channels=num_hiddens,
+            out_channels=embedding_dim,
+            kernel_size=1,
+        )
+        self.vector_quantizer = self.build_vector_quantizer(
+            embedding_dim,
+            num_embeddings,
+            use_ema,
+            decay,
+            epsilon,
+        )
         self.decoder_layer = self.build_decoder(
-            embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens
+            embedding_dim,
+            num_hiddens,
+            num_downsampling_layers,
+            num_residual_layers,
+            num_residual_hiddens,
         )
 
     def build_encoder(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
@@ -143,6 +161,7 @@ class VQVAE(nn.Module):
     def forward(self, x):
         # Use the layers in forward
         encoded_x = self.encoder_layer(x)
+
         pre_vq_x = self.pre_vq_conv_layer(encoded_x)
         (
             quantized_x,
@@ -150,6 +169,7 @@ class VQVAE(nn.Module):
             commitment_loss,
             encoding_indices,
         ) = self.vector_quantizer(pre_vq_x)
+
         x_recon = self.decoder_layer(quantized_x)
 
         return {
@@ -209,11 +229,12 @@ class VectorQuantizer(nn.Module):
         self.m_i_ts = SonnetExponentialMovingAverage(decay, e_i_ts.shape)
 
     def forward(self, x):
-        flat_x = rearrange(x, "b c h w -> b (h w) c")
+        flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
         distances = (flat_x**2).sum(1, keepdim=True) - 2 * flat_x @ self.e_i_ts + (self.e_i_ts**2).sum(0, keepdim=True)
         encoding_indices = distances.argmin(1)
-        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1))
-        quantized_x = rearrange(quantized_x, "b h w c -> b c h w")
+        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1)).permute(
+            0, 3, 1, 2
+        )
 
         # See second term of Equation (3).
         if not self.use_ema:
@@ -232,13 +253,13 @@ class VectorQuantizer(nn.Module):
 
                 # Cluster counts.
                 encoding_one_hots = F.one_hot(encoding_indices, self.num_embeddings).type(flat_x.dtype)
-                n_i_ts = reduce(encoding_one_hots, "b n -> n", "sum")
+                n_i_ts = encoding_one_hots.sum(0)
                 # Updated exponential moving average of the cluster counts.
                 # See Equation (6).
                 self.N_i_ts(n_i_ts)
 
                 # Exponential moving average of the embeddings. See Equation (7).
-                embed_sums = reduce(flat_x, "b n c -> n c", "sum", n=encoding_one_hots)
+                embed_sums = flat_x.transpose(0, 1) @ encoding_one_hots
                 self.m_i_ts(embed_sums)
 
                 # This is kind of weird. <- comment from the original code.

@@ -1,6 +1,7 @@
 import torch
 import imageio
 import numpy as np
+from PIL import Image
 from matplotlib import pyplot as plt
 from torchvision.utils import save_image
 
@@ -156,3 +157,24 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     plt.tight_layout()
     plt.savefig(f"{cfg.logger.results_path}/reconstructions_{cfg.model.type}_{cfg.dataset.name}.png")
     plt.show()
+
+
+def save_img_tensors_as_grid(img_tensors, nrows, f):
+    img_tensors = img_tensors.permute(0, 2, 3, 1)
+    imgs_array = img_tensors.detach().cpu().numpy()
+    imgs_array[imgs_array < -0.5] = -0.5
+    imgs_array[imgs_array > 0.5] = 0.5
+    imgs_array = 255 * (imgs_array + 0.5)
+    (batch_size, img_size, _, _) = img_tensors.shape
+    ncols = batch_size // nrows
+    img_arr = np.zeros((nrows * img_size, ncols * img_size, 3))
+    for idx in range(batch_size):
+        row_idx = idx // ncols
+        col_idx = idx % ncols
+        row_start = row_idx * img_size
+        row_end = row_start + img_size
+        col_start = col_idx * img_size
+        col_end = col_start + img_size
+        img_arr[row_start:row_end, col_start:col_end] = np.transpose(imgs_array[idx], (0, 2, 1))  # Transpose the axes
+
+    Image.fromarray(img_arr.astype(np.uint8), "RGB").save(f"{f}.jpg")

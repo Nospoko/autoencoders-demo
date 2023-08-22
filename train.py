@@ -7,12 +7,21 @@ import psutil
 from omegaconf import OmegaConf, DictConfig
 
 import wandb
+from models.VQVAE import VQVAE
 from models.autoencoder import Autoencoder
 from utils.data_loader import get_data_loaders
 from models.ECG_autoencoder import ECG_autoencoder
 from models.variational_autoencoder import Variational_autoencoder
-from utils.visualizations import draw_interpolation_grid, visualize_ecg_reconstruction
-from utils.train_utils import test_epoch, train_epoch, test_epoch_ecg, train_epoch_ecg, prepare_loss_function
+from utils.visualizations import draw_interpolation_grid, save_img_tensors_as_grid, visualize_ecg_reconstruction
+from utils.train_utils import (
+    test_epoch,
+    train_epoch,
+    test_epoch_ecg,
+    train_epoch_ecg,
+    test_epoch_vqvae,
+    train_epoch_vqvae,
+    prepare_loss_function,
+)
 
 
 def initialize_model(cfg: DictConfig, input_size):
@@ -22,6 +31,8 @@ def initialize_model(cfg: DictConfig, input_size):
         model = ECG_autoencoder(cfg, input_size)
     elif cfg.model.type == "VAE":
         model = Variational_autoencoder(cfg, input_size)
+    elif cfg.model.type == "VQ-VAE":
+        model = VQVAE(cfg.vqvae, cfg.system.cuda)
     else:
         raise NotImplementedError("Model type not implemented")
     return model.to(model.device)
@@ -35,8 +46,72 @@ def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Mod
 
     if cfg.model.type == "ECG_AE":
         train_ecg_autoencoder(cfg, autoencoder, loss_function, train_loader, test_loader)
+    elif cfg.model.type == "VQ-VAE":
+        train_vqvae(cfg, autoencoder, loss_function, train_loader, test_loader)
     else:
         train_autoencoder(cfg, autoencoder, loss_function, train_loader, test_loader)
+
+
+def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
+    total_start_time = time.time()
+    process = psutil.Process()
+
+    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
+    for epoch in range(1, cfg.train.epochs + 1):
+        start_time = time.time()
+
+        avg_loss = train_epoch_vqvae(
+            autoencoder,
+            train_loader,
+            optimizer,
+            autoencoder.device,
+            cfg.train.log_interval,
+            epoch,
+            loss_function,
+            cfg.vqvae.beta,
+        )
+        avg_test_loss = test_epoch_vqvae(autoencoder, test_loader, autoencoder.device, loss_function, cfg.vqvae.beta)
+
+        # save checkpoint
+        checkpoint = {
+            "epoch": epoch,
+            "model_state_dict": autoencoder.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": cfg,  # Saving the config used for this training run
+        }
+        checkpoint_path = "{}/{}_{}_checkpoint_epoch_{}.pt".format(
+            cfg.logger.checkpoint_path, cfg.model.type, cfg.dataset.name, epoch
+        )
+        torch.save(checkpoint, checkpoint_path)
+
+        memory_usage = process.memory_info().rss / (1024 * 1024)
+        end_time = time.time()
+        epoch_duration = end_time - start_time
+        # Get CPU utilization
+        cpu_utilization = psutil.cpu_percent()
+
+        if torch.cuda.is_available():
+            gpu_util = torch.cuda.max_memory_allocated() / torch.cuda.get_device_properties(0).total_memory
+            gpu_util *= 100
+        else:
+            gpu_util = 0
+
+        if cfg.logger.enable_wandb:
+            wandb.log(
+                {
+                    "train/loss": avg_loss,
+                    "test/loss": avg_test_loss,
+                    "memory_usage": memory_usage,
+                    "epoch_duration": epoch_duration,
+                    "cpu_utilization": cpu_utilization,
+                    "gpu_utilization": gpu_util,
+                }
+            )
+    total_end_time = time.time()
+    total_training_time = total_end_time - total_start_time
+
+    if cfg.logger.enable_wandb:
+        wandb.log({"total_training_time": total_training_time})
 
 
 def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
@@ -234,7 +309,7 @@ def main(cfg: DictConfig):
             name=name,
             config=OmegaConf.to_container(cfg, resolve=True),
         )
-    train_multiple = True
+    train_multiple = False
     if train_multiple:
         start = 1
         end = 32
@@ -249,6 +324,15 @@ def main(cfg: DictConfig):
 
     if cfg.model.type == "ECG_AE":
         visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
+    elif cfg.model.type == "VQ-VAE":
+        autoencoder.eval()
+        for test_tensor in test_loader:
+            test_tensor = test_tensor["image"]
+            break
+        save_img_tensors_as_grid(test_tensor, 4, cfg.logger.results_path + "test_tensor.png")
+        save_img_tensors_as_grid(
+            autoencoder(test_tensor[0].to(autoencoder.device))["x_recon"], 4, cfg.logger.results_path + "recon_tensor.png"
+        )
     else:
         draw_interpolation_grid(cfg, autoencoder, test_loader)
 
