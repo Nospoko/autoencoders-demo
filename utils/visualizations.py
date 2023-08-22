@@ -92,7 +92,7 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
 
 @torch.no_grad()
-def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
+def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, display_2d=False):
     """
     Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
 
@@ -100,6 +100,7 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     :param autoencoder: The trained autoencoder model.
     :param test_loader: The data loader for the test dataset.
     :param num_trio: The number of trios to visualize.
+    :param display_2d: A flag to display embedding in 2D or 1D.
     """
 
     found_labels = set()
@@ -125,20 +126,24 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
         autoencoder.eval()  # set the model to evaluation mode
         embedding = autoencoder.encode(image.unsqueeze(0).to(autoencoder.device))
 
-        # Calculate the padding for the embedding
-        embedding_size = embedding.size(1)
-        side_length = int(np.ceil(np.sqrt(embedding_size)))
-        padding_size = side_length * side_length - embedding_size
-
         # Original image
         axs[idx, 0].imshow(image.squeeze().numpy(), cmap="gray")
         axs[idx, 0].set_title(f"Label {label} - Original Image")
 
         # Embedding
-        padded_embedding = torch.nn.functional.pad(embedding, (0, padding_size), mode="constant", value=0)
-        image_embedding = padded_embedding.squeeze().detach().cpu().numpy().reshape(side_length, side_length)
-        axs[idx, 1].imshow(image_embedding, cmap="gray")
-        axs[idx, 1].set_title(f"Label {label} - Embedding")
+        if display_2d:
+            embedding_size = embedding.size(1)
+            side_length = int(np.ceil(np.sqrt(embedding_size)))
+            padding_size = side_length * side_length - embedding_size
+            padded_embedding = torch.nn.functional.pad(embedding, (0, padding_size), mode="constant", value=0)
+            image_embedding = padded_embedding.squeeze().detach().cpu().numpy().reshape(side_length, side_length)
+            axs[idx, 1].imshow(image_embedding, cmap="gray")
+        else:
+            image_embedding = embedding.squeeze().detach().cpu().numpy()
+            axs[idx, 1].hist(image_embedding, bins=20, range=[-3, 3], color="blue", edgecolor="black")
+            axs[idx, 1].set_xlim([-3, 3])
+
+        axs[idx, 1].set_title(f"Label {label} - {'2D Embedding' if display_2d else 'embedding histogram'}")
 
         # Reconstructed image
         reconstructed_image = autoencoder.decode(embedding).squeeze().detach().cpu().numpy()
@@ -146,7 +151,8 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
         axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
 
         for j in range(3):
-            axs[idx, j].set_xticks([])
+            if not (j == 1 and not display_2d):
+                axs[idx, j].set_xticks([])
             axs[idx, j].set_yticks([])
 
     plt.tight_layout()
