@@ -9,14 +9,22 @@ python train.py --config-name <config>
 ```
 
 where `<config>` is a .yaml file in the `configs` folder.
+- use `ecg_config.yaml` for 1D signal data
 - `config.yaml` for MNIST/CIFAR10 images
 
 ## Expected results
+**LTAFDB**:
+![Expected results](screenshots/expected.png)
+**blue/green**: original signal
+
+**red/orange**: reconstructed signal
+
+channel 0 on the left, channel 1 on the right
+
 **MNIST**:
 
-![expected result](screenshots/expected.png)
-
-### Code Style
+![expected result](screenshots/expected_mnist.png)
+## Code Style
 
 This repository uses pre-commit hooks with forced python formatting ([black](https://github.com/psf/black),
 [flake8](https://flake8.pycqa.org/en/latest/), and [isort](https://pycqa.github.io/isort/)):
