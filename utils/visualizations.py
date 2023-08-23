@@ -36,16 +36,7 @@ def draw_interpolation_grid(cfg, autoencoder, test_loader):
         "{}/interpolations_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
         nrow=images_per_row,
     )
-
-    # interpolations = interpolations.cpu()
-    # interpolations = np.reshape(interpolations.data.numpy(), (-1, img_dim, img_dim, channels))
-    # if channels == 1:  # Convert grayscale to RGB for gif
-    #     interpolations = np.repeat(interpolations, 3, axis=-1)
-    # interpolations *= 256
-    # imageio.mimsave(
-    #     "{}/animation_{}_{}.gif".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
-    #     interpolations.astype(np.uint8),
-    # )
+    print("Interpolation grid saved.")
 
 
 @torch.no_grad()

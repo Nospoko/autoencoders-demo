@@ -8,11 +8,8 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
     train_loss = 0
 
     for batch_idx, batch in enumerate(train_loader):
-        data = batch["image"].to(device)
-        data = (data + 1) / 2.0  # Remapping from [-1, 1] to [0, 1]
+        data = batch["image"].to(device) / 255.0
 
-        # if len(data.shape) == 4:
-        #     data = data.permute(0, 3, 1, 2)
         if len(data.shape) == 3:
             data = data.unsqueeze(1)
 
@@ -49,8 +46,7 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
     test_loss = 0
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
-            data = batch["image"].to(device)
-            data = (data + 1) / 2.0  # Remapping from [-1, 1] to [0, 1]
+            data = batch["image"].to(device) / 255.0
 
             # if len(data.shape) == 4:
             #     data = data.permute(0, 3, 1, 2)
