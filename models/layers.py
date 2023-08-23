@@ -58,7 +58,7 @@ class CNN_Encoder(nn.Module):
         return int(np.prod(f.size()[1:]))
 
     def forward(self, x):
-        x = self.conv(x.view(-1, *self.input_size))
+        x = self.conv(x.reshape(-1, *self.input_size))
         x = x.contiguous().view(-1, self.flat_fts)
         return self.linear(x)
 

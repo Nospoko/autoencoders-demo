@@ -97,7 +97,7 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
 
 @torch.no_grad()
-def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
+def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
     """
     Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
 
@@ -105,17 +105,16 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     :param autoencoder: The trained autoencoder model.
     :param test_loader: The data loader for the test dataset.
     :param num_trio: The number of trios to visualize.
+    :param display_2d: A flag to display embedding in 2D or 1D.
+    :param rgb: Whether the images are RGB.
     """
-
-    autoencoder.eval()  # Set the model to evaluation mode
-    autoencoder.to(autoencoder.device)
 
     found_labels = set()
     label_to_image = {}
 
     for idx in range(len(test_loader.dataset)):
-        image = test_loader.dataset[idx]["image"]
-        label = test_loader.dataset[idx]["label"]
+        image = test_loader.dataset["image"][idx]
+        label = test_loader.dataset["label"][idx]
 
         if label not in found_labels:
             label_to_image[label] = image
@@ -127,33 +126,50 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     fig, axs = plt.subplots(num_trio, 3, figsize=(9, 3 * num_trio))
 
     for idx, (label, image) in enumerate(label_to_image.items()):
-        image = image.float().to(autoencoder.device) / 255.0
+        image = image.float() / 255.0
 
-        if cfg.model.type == "VAE":
-            mu, logvar = autoencoder.encode(image.unsqueeze(0))
-            z = autoencoder.reparameterize(mu, logvar)
+        if rgb:
+            image = image.permute(1, 2, 0)  # CxHxW -> HxWxC if RGB
+            cmap = None  # Default colormap for RGB images
         else:
-            z = autoencoder.encode(image.unsqueeze(0))
+            cmap = "gray"
 
-        reconstructed_image = autoencoder.decode(z).squeeze().cpu().numpy()
+        # Create an embedding for the image
+        autoencoder.eval()  # Set the model to evaluation mode
+        embedding = autoencoder.encode(image.unsqueeze(0).to(autoencoder.device))
 
         # Original image
-        axs[idx, 0].imshow(image.cpu().squeeze().numpy(), cmap="gray")
-        axs[idx, 0].set_title(f"Label {label} - Original")
+        axs[idx, 0].imshow(image.cpu().numpy(), cmap=cmap)
+        axs[idx, 0].set_title(f"Label {label} - Original Image")
 
         # Embedding
-        embedding_size = z.size(1)
-        side_length = int(np.ceil(np.sqrt(embedding_size)))
-        padding_needed = side_length * side_length - embedding_size
+        if cfg.model.type == "VAE":
+            mu, log_var = embedding
+            image_embedding = mu.cpu().numpy().squeeze()
+        else:
+            image_embedding = embedding.squeeze().detach().cpu().numpy()
+        axs[idx, 1].hist(image_embedding, bins=20, range=[-3, 3], color="blue", edgecolor="black")
+        axs[idx, 1].set_xlim([-3, 3])
 
-        padded_z = torch.nn.functional.pad(z, (0, padding_needed), mode="constant", value=0)
-
-        axs[idx, 1].imshow(padded_z.cpu().squeeze().numpy().reshape(side_length, side_length), cmap="gray")
-        axs[idx, 1].set_title(f"Label {label} - Embedding")
+        axs[idx, 1].set_title(f"Label {label} - {'1D Embedding'}")
 
         # Reconstructed image
-        axs[idx, 2].imshow(reconstructed_image, cmap="gray")
-        axs[idx, 2].set_title(f"Label {label} - Reconstructed")
+        if cfg.model.type == "VAE":
+            reconstructed_image, _, _ = autoencoder(image.unsqueeze(0).to(autoencoder.device))
+            reconstructed_image = reconstructed_image.squeeze().cpu().detach().numpy()
+        else:
+            reconstructed_image = autoencoder.decode(embedding).squeeze().cpu().detach().numpy()
+
+        if rgb:
+            reconstructed_image = reconstructed_image.transpose(1, 2, 0)  # If it's a numpy array
+            # or if it's a tensor
+            # reconstructed_image = reconstructed_image.permute(1, 2, 0).cpu().numpy()
+
+        # Clipping if needed, example for float type
+        reconstructed_image = np.clip(reconstructed_image, 0, 1)
+
+        axs[idx, 2].imshow(reconstructed_image, cmap=cmap)
+        axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
 
         for j in range(3):
             axs[idx, j].axis("off")
