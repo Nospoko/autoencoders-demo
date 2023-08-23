@@ -1,14 +1,14 @@
 train:
-  batch_size: 128
+  batch_size: 32
   epochs: 10
   log_interval: 10
-  lr: 0.001
+  lr: 2e-4
   loss_function: "MSE"
   shuffle: True
 
 model:
   type: "VQ-VAE"
-  embedding_size: 32
+  embedding_size: 64
 
 logger:
   results_path: "results/"
@@ -28,7 +28,7 @@ vqvae:
     num_downsampling_layers: 2
     num_residual_layers: 2
     num_residual_hiddens: 32
-    embedding_dim: 32
+    embedding_dim: 64
     num_embeddings: 512
     use_ema: True
     decay: 0.99

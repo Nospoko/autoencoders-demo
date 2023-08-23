@@ -29,9 +29,7 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
             interp_dec = model.decode(interp)
 
             if img_dim == 32:  # CIFAR10 or any RGB image with 32x32 dimensions
-                line = torch.cat(
-                    (images[i].unsqueeze(0).permute(0, 3, 1, 2), interp_dec, images[i + 1].unsqueeze(0).permute(0, 3, 1, 2)), 0
-                )
+                line = torch.cat((images[i].unsqueeze(0), interp_dec, images[i + 1].unsqueeze(0)), 0)
             else:  # Grayscale images like MNIST
                 # Add channel dimension
                 line = torch.cat((images[i].unsqueeze(0).unsqueeze(1), interp_dec, images[i + 1].unsqueeze(0).unsqueeze(1)), 0)
@@ -44,9 +42,7 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
         interp_dec = model.decode(interp)
 
         if img_dim == 32:  # CIFAR10 or any RGB image with 32x32 dimensions
-            line = torch.cat(
-                (images[i].unsqueeze(0).permute(0, 3, 1, 2), interp_dec, images[i + 1].unsqueeze(0).permute(0, 3, 1, 2)), 0
-            )
+            line = torch.cat((images[i].unsqueeze(0), interp_dec, images[i + 1].unsqueeze(0)), 0)
         else:  # Grayscale images like MNIST
             # Add channel dimension
             line = torch.cat((images[i].unsqueeze(0).unsqueeze(1), interp_dec, images[i + 1].unsqueeze(0).unsqueeze(1)), 0)

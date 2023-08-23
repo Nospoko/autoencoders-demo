@@ -2,9 +2,21 @@ import sys
 
 import torch
 from datasets import load_dataset
+from torchvision import transforms
+
+# Define the transform
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
 
 
-def get_data_loaders(cfg, return_targets=False):
+# Apply transformations using the map function
+def apply_transform(batch):
+    # 'image' is assumed to be the key holding the image data
+    transformed_image = transform(batch["image"])
+    batch["image"] = transformed_image
+    return batch
+
+
+def get_data_loaders(cfg, return_targets=False, return_data_variance=False):
     """
     Returns the data loaders for the dataset specified in cfg.dataset.
     If return_targets is True, it also returns the targets.
@@ -27,6 +39,8 @@ def get_data_loaders(cfg, return_targets=False):
         data = load_dataset("cifar10")
         data["train"] = data["train"].rename_column("img", "image")
         data["test"] = data["test"].rename_column("img", "image")
+        data["train"] = data["train"].map(apply_transform)
+        data["test"] = data["test"].map(apply_transform)
         input_size = (3, 32, 32)
 
     elif cfg.dataset.name == "ltafdb":

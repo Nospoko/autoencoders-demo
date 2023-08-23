@@ -10,8 +10,8 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
     for batch_idx, batch in enumerate(train_loader):
         data = batch["image"].to(device) / 255.0
 
-        if len(data.shape) == 4:
-            data = data.permute(0, 3, 1, 2)
+        # if len(data.shape) == 4:
+        #     data = data.permute(0, 3, 1, 2)
         if len(data.shape) == 3:
             data = data.unsqueeze(1)
 
@@ -50,8 +50,8 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
         for batch_idx, batch in enumerate(test_loader):
             data = batch["image"].to(device) / 255.0
 
-            if len(data.shape) == 4:
-                data = data.permute(0, 3, 1, 2)
+            # if len(data.shape) == 4:
+            #     data = data.permute(0, 3, 1, 2)
             if len(data.shape) == 3:
                 data = data.unsqueeze(1)
 
@@ -71,7 +71,7 @@ def prepare_loss_function(train_cfg):
     if train_cfg.loss_function == "BCE":
         return torch.nn.BCELoss(reduction="sum")
     elif train_cfg.loss_function == "MSE":
-        return torch.nn.MSELoss(reduction="sum")
+        return torch.nn.MSELoss()
     elif train_cfg.loss_function == "VAE":
         return VAELoss()
 
@@ -127,7 +127,9 @@ def test_epoch_ecg(autoencoder, test_loader, device, loss_function, verbose=True
     return avg_loss
 
 
-def train_epoch_vqvae(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, beta):
+def train_epoch_vqvae(
+    autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, beta, use_ema, best_train_loss
+):
     autoencoder.train()
     total_train_loss = 0
     total_recon_error = 0
@@ -135,15 +137,14 @@ def train_epoch_vqvae(autoencoder, train_loader, optimizer, device, log_interval
     for batch_idx, train_tensors in enumerate(train_loader):
         optimizer.zero_grad()
 
-        imgs = train_tensors["image"].to(device) / 255.0
-        imgs = imgs.permute(0, 3, 1, 2)
+        imgs = train_tensors["image"].to(device)
 
         out = autoencoder(imgs)
-        recon_error = loss_function(out["x_recon"], imgs)  # Assuming that loss_function is MSE Loss
+        recon_error = loss_function(out["x_recon"], imgs)
         total_recon_error += recon_error.item()
         loss = recon_error + beta * out["commitment_loss"]  # cfg.train.beta is the configurable beta term
 
-        if "dictionary_loss" in out and out["dictionary_loss"] is not None:
+        if not use_ema:
             loss += out["dictionary_loss"]
 
         total_train_loss += loss.item()
@@ -154,10 +155,14 @@ def train_epoch_vqvae(autoencoder, train_loader, optimizer, device, log_interval
         if (batch_idx + 1) % log_interval == 0:
             avg_train_loss = total_train_loss / n_train
             avg_recon_error = total_recon_error / n_train
+
+            if avg_train_loss < best_train_loss:
+                best_train_loss = avg_train_loss
             print(
                 f"Train Epoch: {epoch} [{batch_idx * len(imgs)}/{len(train_loader.dataset)} ({100. * batch_idx / len(train_loader):.0f}%)]"
             )
             print(f"Avg Train Loss: {avg_train_loss}")
+            print(f"Best Train Loss: {best_train_loss}")
             print(f"Avg Recon Error: {avg_recon_error}")
 
             total_train_loss = 0
@@ -172,8 +177,7 @@ def test_epoch_vqvae(autoencoder, test_loader, device, loss_function, beta):
     n_test = 0
     with torch.no_grad():
         for batch_idx, test_tensors in enumerate(test_loader):
-            imgs = test_tensors["image"].to(device) / 255.0  # Adjust as needed
-            imgs = imgs.permute(0, 3, 1, 2)
+            imgs = test_tensors["image"].to(device)
             out = autoencoder(imgs)
             recon_error = loss_function(out["x_recon"], imgs)
             loss = recon_error + beta * out["commitment_loss"]

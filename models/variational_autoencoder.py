@@ -33,7 +33,7 @@ class Variational_autoencoder(nn.Module):
         return self.decoder(z)
 
     def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, *self.input_size))
+        mu, logvar = self.encode(x.contiguous().view(-1, *self.input_size))
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
 

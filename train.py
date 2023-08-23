@@ -55,7 +55,7 @@ def train(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Mod
 def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
     total_start_time = time.time()
     process = psutil.Process()
-
+    best_train_loss = float("inf")
     optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
         start_time = time.time()
@@ -69,6 +69,8 @@ def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.
             epoch,
             loss_function,
             cfg.vqvae.beta,
+            cfg.vqvae.use_ema,
+            best_train_loss,
         )
         avg_test_loss = test_epoch_vqvae(autoencoder, test_loader, autoencoder.device, loss_function, cfg.vqvae.beta)
 
@@ -325,13 +327,8 @@ def main(cfg: DictConfig):
     if cfg.model.type == "ECG_AE":
         visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
     elif cfg.model.type == "VQ-VAE":
-        autoencoder.eval()
-        for test_tensor in test_loader:
-            test_tensor = test_tensor["image"]
-            break
-        save_img_tensors_as_grid(test_tensor, 4, cfg.logger.results_path + "test_tensor.png")
         save_img_tensors_as_grid(
-            autoencoder(test_tensor[0].to(autoencoder.device))["x_recon"], 4, cfg.logger.results_path + "recon_tensor.png"
+            autoencoder, test_loader, 4, f"{cfg.logger.results_path}side_by_side_comparison", side_by_side=True
         )
     else:
         draw_interpolation_grid(cfg, autoencoder, test_loader)

@@ -114,6 +114,7 @@ class VQVAE(nn.Module):
         epsilon = cfg.epsilon
 
         self.device = torch.device("cuda" if device and torch.cuda.is_available() else "cpu")
+        print(self.device)
 
         # Define layers in __init__
         self.encoder_layer = self.build_encoder(

@@ -1,5 +1,4 @@
 import torch
-import imageio
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
@@ -11,11 +10,15 @@ from utils.utils import get_interpolations
 @torch.no_grad()
 def draw_interpolation_grid(cfg, autoencoder, test_loader):
     for batch in test_loader:
-        images = batch["image"].to(autoencoder.device) / 255.0
+        images = batch["image"].to(autoencoder.device)
         break  # Get the first batch for visualization purposes
 
     images_per_row = 16
     interpolations = get_interpolations(cfg, autoencoder, autoencoder.device, images, images_per_row)
+    interpolations = (interpolations - interpolations.min()) / (interpolations.max() - interpolations.min())
+
+    print("Max:", interpolations.max())
+    print("Min:", interpolations.min())
 
     img_dim = images.shape[-2]
     channels = 3 if img_dim == 32 else 1
@@ -27,21 +30,22 @@ def draw_interpolation_grid(cfg, autoencoder, test_loader):
         sample.view(64, channels, img_dim, img_dim),
         "{}/sample_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
     )
+
     save_image(
         interpolations.view(-1, channels, img_dim, img_dim),
         "{}/interpolations_{}_{}.png".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
         nrow=images_per_row,
     )
 
-    interpolations = interpolations.cpu()
-    interpolations = np.reshape(interpolations.data.numpy(), (-1, img_dim, img_dim, channels))
-    if channels == 1:  # Convert grayscale to RGB for gif
-        interpolations = np.repeat(interpolations, 3, axis=-1)
-    interpolations *= 256
-    imageio.mimsave(
-        "{}/animation_{}_{}.gif".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
-        interpolations.astype(np.uint8),
-    )
+    # interpolations = interpolations.cpu()
+    # interpolations = np.reshape(interpolations.data.numpy(), (-1, img_dim, img_dim, channels))
+    # if channels == 1:  # Convert grayscale to RGB for gif
+    #     interpolations = np.repeat(interpolations, 3, axis=-1)
+    # interpolations *= 256
+    # imageio.mimsave(
+    #     "{}/animation_{}_{}.gif".format(cfg.logger.results_path, cfg.model.type, cfg.dataset.name),
+    #     interpolations.astype(np.uint8),
+    # )
 
 
 @torch.no_grad()
@@ -159,22 +163,54 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10):
     plt.show()
 
 
-def save_img_tensors_as_grid(img_tensors, nrows, f):
-    img_tensors = img_tensors.permute(0, 2, 3, 1)
-    imgs_array = img_tensors.detach().cpu().numpy()
-    imgs_array[imgs_array < -0.5] = -0.5
-    imgs_array[imgs_array > 0.5] = 0.5
-    imgs_array = 255 * (imgs_array + 0.5)
-    (batch_size, img_size, _, _) = img_tensors.shape
+@torch.no_grad()
+def save_img_tensors_as_grid(model, train_loader, nrows, f, side_by_side=False, reconstructed=False, type="VQ-VAE"):
+    if side_by_side:
+        reconstructed = False
+
+    for batch in train_loader:
+        img_tensors = batch["image"].to(model.device)
+        if type == "VAE":
+            reconstructed_tensors, _, _ = model(img_tensors)
+        else:
+            reconstructed_tensors = model(img_tensors)["x_recon"]
+        break
+
+    if reconstructed:
+        img_tensors = reconstructed_tensors
+
+    img_tensors = img_tensors.permute(0, 2, 3, 1).detach().cpu().numpy()
+    if side_by_side:
+        reconstructed_tensors = reconstructed_tensors.permute(0, 2, 3, 1).detach().cpu().numpy()
+
+    # Preprocess the image tensors
+    img_tensors = np.clip(255 * (img_tensors + 0.5), 0, 255).astype(np.uint8)
+    if side_by_side:
+        reconstructed_tensors = np.clip(255 * (reconstructed_tensors + 0.5), 0, 255).astype(np.uint8)
+
+    batch_size, img_size, _, _ = img_tensors.shape
     ncols = batch_size // nrows
-    img_arr = np.zeros((nrows * img_size, ncols * img_size, 3))
+
+    if side_by_side:
+        img_arr = np.zeros((nrows * img_size, 2 * ncols * img_size, 3), dtype=np.uint8)
+    else:
+        img_arr = np.zeros((nrows * img_size, ncols * img_size, 3), dtype=np.uint8)
+
     for idx in range(batch_size):
         row_idx = idx // ncols
         col_idx = idx % ncols
+
         row_start = row_idx * img_size
         row_end = row_start + img_size
-        col_start = col_idx * img_size
-        col_end = col_start + img_size
-        img_arr[row_start:row_end, col_start:col_end] = np.transpose(imgs_array[idx], (0, 2, 1))  # Transpose the axes
 
-    Image.fromarray(img_arr.astype(np.uint8), "RGB").save(f"{f}.jpg")
+        if side_by_side:
+            col_start = 2 * col_idx * img_size
+            col_end = col_start + img_size
+            img_arr[row_start:row_end, col_start:col_end] = img_tensors[idx]
+            img_arr[row_start:row_end, col_end : col_end + img_size] = reconstructed_tensors[idx]
+        else:
+            col_start = col_idx * img_size
+            col_end = col_start + img_size
+            img_arr[row_start:row_end, col_start:col_end] = img_tensors[idx]
+
+    Image.fromarray(img_arr, "RGB").save(f"{f}.jpg")
