@@ -1,29 +1,23 @@
 import torch
-from matplotlib import pyplot as plt
-from sklearn.metrics import accuracy_score
-from sklearn.ensemble import RandomForestClassifier
 
 from train import initialize_model
 from utils.data_loader import get_data_loaders
-from preprocess_dataset import create_embeddings
+from utils.visualizations import draw_interpolation_grid, save_img_tensors_as_grid
 
-accuracies = []
-for embedding_size in range(1, 33):
-    checkpoint_path = f"checkpoints/multiple/VAE_MNIST_checkpoint_epoch_5_embSize_{embedding_size}.pt"
-    checkpoint = torch.load(checkpoint_path)
-    train_loader, test_loader, input_size = get_data_loaders(checkpoint["config"], return_targets=True)
-    autoencoder_instance = initialize_model(checkpoint["config"], input_size)
-    autoencoder_instance.load_state_dict(checkpoint["model_state_dict"])
-    test_embeddings, test_labels = create_embeddings(checkpoint["config"], autoencoder_instance, test_loader)
-    train_embeddings, train_labels = create_embeddings(checkpoint["config"], autoencoder_instance, train_loader)
-    clf = RandomForestClassifier(n_estimators=100)
-    clf.fit(train_embeddings, train_labels)
-    preds = clf.predict(test_embeddings)
-    accuracies.append(accuracy_score(test_labels, preds) * 100)
-    print(accuracies[-1])
+checkpoint_path = "checkpoints/VAE_CIFAR10_checkpoint_epoch_1_embSize_64.pt"
+checkpoint = torch.load(checkpoint_path)
+train_loader, test_loader, input_size = get_data_loaders(checkpoint["config"], return_targets=True)
+autoencoder_instance = initialize_model(checkpoint["config"], input_size)
+autoencoder_instance.load_state_dict(checkpoint["model_state_dict"])
 
-plt.plot(range(1, 33), accuracies)
-plt.xlabel("Embedding Size")
-plt.ylabel("Validation Accuracy")
-plt.title("Validation Accuracy vs. Embedding Size")
-plt.show()
+
+# visualize_embedding(checkpoint["config"], autoencoder_instance, test_loader)
+save_img_tensors_as_grid(
+    autoencoder_instance,
+    test_loader,
+    4,
+    f"{checkpoint['config'].logger.results_path}side_by_side_comparison",
+    side_by_side=True,
+    type="VAE",
+)
+draw_interpolation_grid(checkpoint["config"], autoencoder_instance, test_loader)

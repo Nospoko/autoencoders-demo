@@ -12,7 +12,7 @@ from models.autoencoder import Autoencoder
 from utils.data_loader import get_data_loaders
 from models.ECG_autoencoder import ECG_autoencoder
 from models.variational_autoencoder import Variational_autoencoder
-from utils.visualizations import visualize_embedding, save_img_tensors_as_grid, visualize_ecg_reconstruction
+from utils.visualizations import draw_interpolation_grid, save_img_tensors_as_grid, visualize_ecg_reconstruction
 from utils.train_utils import (
     test_epoch,
     train_epoch,
@@ -326,13 +326,17 @@ def main(cfg: DictConfig):
 
     if cfg.model.type == "ECG_AE":
         visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
-    elif cfg.model.type == "VQ-VAE":
+    elif cfg.model.type == "VQ-VAE" or cfg.dataset.name == "CIFAR10":
         save_img_tensors_as_grid(
-            autoencoder, test_loader, 4, f"{cfg.logger.results_path}side_by_side_comparison", side_by_side=True
+            autoencoder,
+            test_loader,
+            4,
+            f"{cfg.logger.results_path}side_by_side_comparison",
+            side_by_side=True,
+            type=cfg.model.type,
         )
     else:
-        # draw_interpolation_grid(cfg, autoencoder, test_loader)
-        visualize_embedding(cfg, autoencoder, test_loader)
+        draw_interpolation_grid(cfg, autoencoder, test_loader)
 
 
 if __name__ == "__main__":

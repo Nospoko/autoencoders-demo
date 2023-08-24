@@ -10,7 +10,10 @@ from utils.utils import get_interpolations
 @torch.no_grad()
 def draw_interpolation_grid(cfg, autoencoder, test_loader):
     for batch in test_loader:
-        images = batch["image"].to(autoencoder.device)
+        if cfg.dataset.name == "MNIST" or cfg.dataset.name == "FashionMNIST" or cfg.dataset.name == "AmbiguousMNIST":
+            images = batch["image"].to(autoencoder.device) / 255.0
+        elif cfg.dataset.name == "CIFAR10":
+            images = batch["image"].to(autoencoder.device)
         break  # Get the first batch for visualization purposes
 
     images_per_row = 16
@@ -88,9 +91,7 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
 
 @torch.no_grad()
-
 def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
-
     """
     Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
 
@@ -148,7 +149,6 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
 
         axs[idx, 1].set_title(f"Label {label} - {'1D Embedding'}")
 
-
         # Reconstructed image
         if cfg.model.type == "VAE":
             reconstructed_image, _, _ = autoencoder(image.unsqueeze(0).to(autoencoder.device))
@@ -168,10 +168,9 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
         axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
 
         for j in range(3):
-            if not (j == 1 and not display_2d):
+            if not (j == 1):
                 axs[idx, j].set_xticks([])
             axs[idx, j].set_yticks([])
-
 
     plt.tight_layout()
     plt.savefig(f"{cfg.logger.results_path}/reconstructions_{cfg.model.type}_{cfg.dataset.name}.png")
