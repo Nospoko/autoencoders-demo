@@ -88,7 +88,9 @@ def visualize_ecg_reconstruction(cfg, autoencoder, test_loader):
 
 
 @torch.no_grad()
+
 def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
+
     """
     Visualize the original image, its embedding, and its reconstruction for each label in the dataset.
 
@@ -98,6 +100,7 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
     :param num_trio: The number of trios to visualize.
     :param display_2d: A flag to display embedding in 2D or 1D.
     :param rgb: Whether the images are RGB.
+
     """
 
     found_labels = set()
@@ -134,6 +137,7 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
         axs[idx, 0].set_title(f"Label {label} - Original Image")
 
         # Embedding
+
         if cfg.model.type == "VAE":
             mu, log_var = embedding
             image_embedding = mu.cpu().numpy().squeeze()
@@ -143,6 +147,7 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
         axs[idx, 1].set_xlim([-3, 3])
 
         axs[idx, 1].set_title(f"Label {label} - {'1D Embedding'}")
+
 
         # Reconstructed image
         if cfg.model.type == "VAE":
@@ -163,7 +168,10 @@ def visualize_embedding(cfg, autoencoder, test_loader, num_trio=10, rgb=False):
         axs[idx, 2].set_title(f"Label {label} - Reconstructed Image")
 
         for j in range(3):
-            axs[idx, j].axis("off")
+            if not (j == 1 and not display_2d):
+                axs[idx, j].set_xticks([])
+            axs[idx, j].set_yticks([])
+
 
     plt.tight_layout()
     plt.savefig(f"{cfg.logger.results_path}/reconstructions_{cfg.model.type}_{cfg.dataset.name}.png")
