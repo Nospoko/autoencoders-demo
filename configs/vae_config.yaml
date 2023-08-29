@@ -1,0 +1,26 @@
+train:
+  batch_size: 32
+  epochs: 10
+  log_interval: 10
+  lr: 2e-4
+  loss_function: "VAE"
+  shuffle: True
+
+model:
+  type: "VAE"
+  embedding_size: 64
+  output_size: 512
+
+logger:
+  results_path: "results/"
+  checkpoint_path: "checkpoints/"
+  enable_wandb: False
+
+system:
+  cuda: True
+  seed: 42
+
+dataset:
+  name: "MNIST"
+
+run_date: ${now:%Y_%m_%d_%H_%M}

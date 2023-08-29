@@ -1,14 +1,12 @@
 import os
 
 import torch
-import numpy as np
 from datasets import Dataset, DatasetDict
 
 from train import initialize_model
 from utils.data_loader import get_data_loaders
 
 
-@torch.no_grad()
 def create_embeddings(cfg, autoencoder, data_loader):
     """
     Create embeddings for the given data loader using the given autoencoder.
@@ -20,13 +18,19 @@ def create_embeddings(cfg, autoencoder, data_loader):
     autoencoder.to(autoencoder.device)
     embeddings = []
     labels = []
+    import numpy as np  # Make sure to import NumPy
 
     for batch_idx, batch in enumerate(data_loader):
         data = batch["image"].float().to(autoencoder.device) / 255.0
         target = batch["label"].to(autoencoder.device)
 
-        embedding = autoencoder.encode(data)
-        embeddings.append(embedding.cpu().numpy())
+        if cfg.model.type == "VAE":
+            mu, logvar = autoencoder.encode(data)
+            z = autoencoder.reparameterize(mu, logvar)
+        else:
+            z = autoencoder.encode(data)
+
+        embeddings.append(z.cpu().detach().numpy())
         labels.append(target.cpu().numpy())
 
     embeddings = np.concatenate(embeddings, axis=0)

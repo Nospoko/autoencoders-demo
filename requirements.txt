@@ -5,4 +5,5 @@ numpy==1.23.4
 pre-commit==3.3.3
 psutil==5.9.5
 torch>=2.0
+torchvision==0.15.1
 wandb==0.15.8
