@@ -13,28 +13,27 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
             alpha = np.linspace(0, 1, num_interps + 2)
             interps = []
             for a in alpha:
-                interps.append(a * t2.view(1, -1) + (1 - a) * t1.view(1, -1))
+                interps.append(a * t2.reshape(1, -1) + (1 - a) * t1.reshape(1, -1))
             return torch.cat(interps, 0)
 
         if cfg.model.type == "VAE":
-            mu, logvar = model.encode(images.view(-1, flattened_dim))
+            mu, logvar = model.encode(images.view(-1, flattened_dim).float())
             embeddings = model.reparameterize(mu, logvar).cpu()
         elif cfg.model.type == "AE":
-            embeddings = model.encode(images.view(-1, flattened_dim))
+            embeddings = model.encode(images.view(-1, flattened_dim).float())
 
         interps = []
         for i in range(0, images_per_row + 1, 1):
             interp = interpolate(embeddings[i], embeddings[i + 1], images_per_row - 4)
             interp = interp.to(device)
             interp_dec = model.decode(interp)
+            print(images[i].unsqueeze(0).shape, interp_dec.squeeze(1).shape, images[i + 1].unsqueeze(0).shape)
 
             if img_dim == 32:  # CIFAR10 or any RGB image with 32x32 dimensions
-                line = torch.cat(
-                    (images[i].unsqueeze(0).permute(0, 3, 1, 2), interp_dec, images[i + 1].unsqueeze(0).permute(0, 3, 1, 2)), 0
-                )
+                line = torch.cat((images[i].unsqueeze(0), interp_dec, images[i + 1].unsqueeze(0)), 0)
             else:  # Grayscale images like MNIST
                 # Add channel dimension
-                line = torch.cat((images[i].unsqueeze(0).unsqueeze(1), interp_dec, images[i + 1].unsqueeze(0).unsqueeze(1)), 0)
+                line = torch.cat((images[i].unsqueeze(0), interp_dec.squeeze(1), images[i + 1].unsqueeze(0)), 0)
 
             interps.append(line)
 
@@ -44,12 +43,10 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
         interp_dec = model.decode(interp)
 
         if img_dim == 32:  # CIFAR10 or any RGB image with 32x32 dimensions
-            line = torch.cat(
-                (images[i].unsqueeze(0).permute(0, 3, 1, 2), interp_dec, images[i + 1].unsqueeze(0).permute(0, 3, 1, 2)), 0
-            )
+            line = torch.cat((images[i].unsqueeze(0), interp_dec, images[i + 1].unsqueeze(0)), 0)
         else:  # Grayscale images like MNIST
             # Add channel dimension
-            line = torch.cat((images[i].unsqueeze(0).unsqueeze(1), interp_dec, images[i + 1].unsqueeze(0).unsqueeze(1)), 0)
+            line = torch.cat((images[i].unsqueeze(0), interp_dec.squeeze(1), images[i + 1].unsqueeze(0)), 0)
 
         interps.append(line)
 
