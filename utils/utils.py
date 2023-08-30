@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def get_interpolations(cfg, model, device, images, images_per_row=20):
+def get_interpolations(model, device, images, images_per_row=20):
     model.eval()
     with torch.no_grad():
         img_dim = images.shape[-2]  # For 28 (MNIST) or 32 (CIFAR10)
@@ -16,10 +16,10 @@ def get_interpolations(cfg, model, device, images, images_per_row=20):
                 interps.append(a * t2.reshape(1, -1) + (1 - a) * t1.reshape(1, -1))
             return torch.cat(interps, 0)
 
-        if cfg.model.type == "VAE":
+        if model.model_type == "VAE":
             mu, logvar = model.encode(images.view(-1, flattened_dim).float())
             embeddings = model.reparameterize(mu, logvar).cpu()
-        elif cfg.model.type == "AE":
+        elif model.model_type == "AE":
             embeddings = model.encode(images.view(-1, flattened_dim).float())
 
         interps = []

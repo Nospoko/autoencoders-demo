@@ -16,7 +16,7 @@ logger:
   enable_wandb: False
 
 system:
-  cuda: True
+  device: "cuda:0"
   seed: 42
 
 dataset:

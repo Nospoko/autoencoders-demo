@@ -1,10 +1,21 @@
+from typing import Callable
+
 import torch
+import torch.nn as nn
+from torch.utisl.data import DataLoader
 
 from models.variational_autoencoder import VAELoss
 
 
-def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function):
-    autoencoder.train()
+def train_epoch(
+    model: nn.Module,
+    train_loader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    device: str,
+    log_interval: int,
+    loss_function: Callable,
+):
+    model.train()
     train_loss = 0
 
     for batch_idx, batch in enumerate(train_loader):
@@ -16,10 +27,10 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
         optimizer.zero_grad()
 
         if isinstance(loss_function, VAELoss):
-            recon_batch, mu, logvar = autoencoder(data)
+            recon_batch, mu, logvar = model(data)
             loss = loss_function(recon_batch, data, mu, logvar)
         else:
-            recon_batch = autoencoder(data)
+            recon_batch = model(data)
             loss = loss_function(recon_batch, data)
 
         loss.backward()
@@ -28,8 +39,7 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
 
         if batch_idx % log_interval == 0:
             print(
-                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
-                    epoch,
+                "Training [{}/{} ({:.0f}%)]\tLoss: {:.6f}".format(
                     batch_idx * len(data),
                     len(train_loader.dataset),
                     100.0 * batch_idx / len(train_loader),
@@ -41,8 +51,8 @@ def train_epoch(autoencoder, train_loader, optimizer, device, log_interval, epoc
     return train_loss
 
 
-def test_epoch(autoencoder, test_loader, device, loss_function):
-    autoencoder.eval()
+def test_epoch(model, test_loader, device, loss_function):
+    model.eval()
     test_loss = 0
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
@@ -54,10 +64,10 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
                 data = data.unsqueeze(1)
 
             if isinstance(loss_function, VAELoss):
-                recon_batch, mu, logvar = autoencoder(data)
+                recon_batch, mu, logvar = model(data)
                 test_loss += loss_function(recon_batch, data, mu, logvar).item()
             else:
-                recon_batch = autoencoder(data)
+                recon_batch = model(data)
                 test_loss += loss_function(recon_batch, data).item()
 
     test_loss /= len(test_loader.dataset)
@@ -65,25 +75,25 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
     return test_loss
 
 
-def prepare_loss_function(train_cfg):
-    if train_cfg.loss_function == "BCE":
+def prepare_loss_function(loss_function_name: str):
+    if loss_function_name == "BCE":
         return torch.nn.BCELoss(reduction="sum")
-    elif train_cfg.loss_function == "MSE":
+    elif loss_function_name == "MSE":
         return torch.nn.MSELoss()
-    elif train_cfg.loss_function == "VAE":
+    elif loss_function_name == "VAE":
         return VAELoss()
 
-    raise ValueError(f"Invalid loss function: {train_cfg.loss_function}. Available options are: 'BCE', 'MSE', 'VAE'.")
+    raise ValueError(f"Invalid loss function: {loss_function_name}. Available options are: 'BCE', 'MSE', 'VAE'.")
 
 
-def train_epoch_ecg(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, verbose=True):
-    autoencoder.train()
+def train_epoch_ecg(model, train_loader, optimizer, device, log_interval, epoch, loss_function, verbose=True):
+    model.train()
     train_loss = 0
 
     for batch_idx, batch in enumerate(train_loader):
         data = batch["signal"].to(device)
         optimizer.zero_grad()
-        recon_batch = autoencoder(data)
+        recon_batch = model(data)
 
         loss = loss_function(recon_batch, data)
         loss.backward()
@@ -105,14 +115,14 @@ def train_epoch_ecg(autoencoder, train_loader, optimizer, device, log_interval, 
     return avg_loss
 
 
-def test_epoch_ecg(autoencoder, test_loader, device, loss_function, verbose=True):
-    autoencoder.eval()
+def test_epoch_ecg(model, test_loader, device, loss_function, verbose=True):
+    model.eval()
     test_loss = 0
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_loader):
             data = batch["signal"].to(device)
-            recon_batch = autoencoder(data)
+            recon_batch = model(data)
 
             loss = loss_function(recon_batch, data)
             test_loss += loss.item()
@@ -126,9 +136,18 @@ def test_epoch_ecg(autoencoder, test_loader, device, loss_function, verbose=True
 
 
 def train_epoch_vqvae(
-    autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, beta, use_ema, best_train_loss
+    model,
+    train_loader,
+    optimizer,
+    device,
+    log_interval,
+    epoch,
+    loss_function,
+    beta,
+    use_ema,
+    best_train_loss,
 ):
-    autoencoder.train()
+    model.train()
     total_train_loss = 0
     total_recon_error = 0
     n_train = 0
@@ -137,7 +156,7 @@ def train_epoch_vqvae(
 
         imgs = train_tensors["image"].to(device)
 
-        out = autoencoder(imgs)
+        out = model(imgs)
         recon_error = loss_function(out["x_recon"], imgs)
         total_recon_error += recon_error.item()
         loss = recon_error + beta * out["commitment_loss"]  # cfg.train.beta is the configurable beta term
@@ -169,14 +188,14 @@ def train_epoch_vqvae(
     return avg_train_loss
 
 
-def test_epoch_vqvae(autoencoder, test_loader, device, loss_function, beta):
-    autoencoder.eval()
+def test_epoch_vqvae(model, test_loader, device, loss_function, beta):
+    model.eval()
     total_test_loss = 0
     n_test = 0
     with torch.no_grad():
         for batch_idx, test_tensors in enumerate(test_loader):
             imgs = test_tensors["image"].to(device)
-            out = autoencoder(imgs)
+            out = model(imgs)
             recon_error = loss_function(out["x_recon"], imgs)
             loss = recon_error + beta * out["commitment_loss"]
 
