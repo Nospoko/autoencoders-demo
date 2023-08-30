@@ -38,6 +38,5 @@ def main(cfg: DictConfig):
     if cfg.model.type == "ECG_VAE":
         vae_ecg_pipeline.main(cfg)
 
-
 if __name__ == "__main__":
     main()
