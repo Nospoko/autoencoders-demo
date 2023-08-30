@@ -10,8 +10,9 @@ from utils import get_interpolations
 
 @torch.no_grad()
 def draw_interpolation_grid(cfg: DictConfig, autoencoder, test_loader):
-    batch = next(iter(test_loader))
-    images = batch["image"].to(cfg.system.device) / 255.0
+    for batch in test_loader:
+        images = batch["image"].to(cfg.system.device) / 255.0
+        break  # Get the first batch for visualization purposes
 
     images_per_row = 16
     interpolations = get_interpolations(cfg, autoencoder, cfg.system.device, images, images_per_row)
