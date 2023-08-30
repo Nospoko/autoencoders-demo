@@ -6,13 +6,12 @@ from models.layers import CNN_Decoder, CNN_Encoder
 class Autoencoder(nn.Module):
     model_type: str = "AE"
 
-    def __init__(self, cfg, input_size):
+    def __init__(self, embedding_size: int, input_size: tuple):
         super(Autoencoder, self).__init__()
-        self.cfg = cfg
         self.input_size = input_size
-        output_size = cfg.model.embedding_size
+        output_size = embedding_size
         self.encoder = CNN_Encoder(output_size, input_size=input_size)
-        self.decoder = CNN_Decoder(cfg.model.embedding_size, input_size=input_size)
+        self.decoder = CNN_Decoder(embedding_size, input_size=input_size)
 
     def encode(self, x):
         return self.encoder(x)

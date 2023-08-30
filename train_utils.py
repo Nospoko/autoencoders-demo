@@ -61,15 +61,6 @@ def test_epoch(autoencoder, test_loader, device, loss_function):
     return test_loss
 
 
-def prepare_loss_function(train_cfg):
-    if train_cfg.loss_function == "BCE":
-        return torch.nn.BCELoss(reduction="sum")
-    elif train_cfg.loss_function == "MSE":
-        return torch.nn.MSELoss(reduction="sum")
-
-    raise ValueError("Invalid loss function: {}. Available options are: 'BCE', 'MSE'.".format(train_cfg.loss_function))
-
-
 def train_epoch_ecg(autoencoder, train_loader, optimizer, device, log_interval, epoch, loss_function, verbose=True):
     autoencoder.train()
     train_loss = 0

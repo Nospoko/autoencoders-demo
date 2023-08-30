@@ -1,12 +1,23 @@
-import sys
-
 from omegaconf import DictConfig
 from datasets import load_dataset
 from torchvision import transforms
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
+from datasets import Dataset as HFDataset
 
 # Define the transform
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+
+
+class SizedDataset(Dataset):
+    def __init__(self, dataset: HFDataset, input_size: tuple[int, int, int]):
+        self.dataset = dataset.with_format("torch")
+        self.input_size = input_size
+
+    def __getitem__(self, idx: int) -> dict:
+        return self.dataset[idx]
+
+    def __len__(self) -> int:
+        return len(self.dataset)
 
 
 # Apply transformations using the map function
@@ -16,13 +27,7 @@ def apply_transform(batch):
     return batch
 
 
-def get_data_loaders(cfg: DictConfig):
-    """
-    Returns the data loaders for the dataset specified in cfg.dataset.
-    If return_targets is True, it also returns the targets.
-    """
-    columns_to_load = ["image", "label"]
-
+def prepare_dataset(cfg: DictConfig) -> tuple[SizedDataset, SizedDataset]:
     if cfg.dataset.name == "MNIST":
         data = load_dataset("mnist")
         input_size = (1, 28, 28)
@@ -44,26 +49,18 @@ def get_data_loaders(cfg: DictConfig):
     elif cfg.dataset.name == "ltafdb":
         data = load_dataset("roszcz/ecg-segmentation-ltafdb")
         input_size = (2, 1000)
-        columns_to_load = ["signal", "label"]
-        data["train"].set_format("torch", columns=columns_to_load)
-        data["test"].set_format("torch", columns=columns_to_load)
 
-        train_loader = DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=cfg.train.shuffle)
-        test_loader = DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
-        return train_loader, test_loader, input_size
-
-    else:
-        print("Dataset not supported")
-        sys.exit()
-
-    if cfg.dataset.name == "CIFAR10":
+    elif cfg.dataset.name == "CIFAR10":
         data["train"] = data["train"].map(apply_transform)
         data["test"] = data["test"].map(apply_transform)
 
-    data["train"].set_format("torch", columns=columns_to_load)
-    data["test"].set_format("torch", columns=columns_to_load)
+    else:
+        raise ValueError("Dataset not supported")
 
-    train_loader = DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=True)
-    test_loader = DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
+    # train_loader = DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=True)
+    # test_loader = DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
 
-    return train_loader, test_loader, input_size
+    train_dataset = SizedDataset(dataset=data["train"], input_size=input_size)
+    test_dataset = SizedDataset(dataset=data["test"], input_size=input_size)
+
+    return train_dataset, test_dataset
