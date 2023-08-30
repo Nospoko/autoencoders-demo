@@ -6,11 +6,11 @@ import torch.nn.functional as F
 from models.layers import CNN_Decoder, CNN_Encoder
 
 
-class Variational_autoencoder(nn.Module):
+class VariationalAutoencoder(nn.Module):
     model_type: str = "VAE"
 
     def __init__(self, cfg, input_size):
-        super(Variational_autoencoder, self).__init__()
+        super(VariationalAutoencoder, self).__init__()
         self.cfg = cfg
         self.input_size = input_size
 

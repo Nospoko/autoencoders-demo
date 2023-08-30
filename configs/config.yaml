@@ -21,4 +21,4 @@ dataset:
   name: "MNIST"
 
 run_date: ${now:%Y_%m_%d_%H_%M}
-run_name: ${model.type}-${dataset.name}-${now:%Y-%m-%d-%H-%M}
+run_name: ${dataset.name}-${now:%Y-%m-%d-%H-%M}

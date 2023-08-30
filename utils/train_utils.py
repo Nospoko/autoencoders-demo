@@ -2,7 +2,7 @@ from typing import Callable
 
 import torch
 import torch.nn as nn
-from torch.utisl.data import DataLoader
+from torch.utils.data import DataLoader
 
 from models.variational_autoencoder import VAELoss
 

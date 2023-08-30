@@ -8,10 +8,11 @@ from omegaconf import OmegaConf, DictConfig
 
 import wandb
 from models.VQVAE import VQVAE
-from models.autoencoder import Autoencoder
-from utils.data_loader import get_data_loaders
+from models.model import Autoencoder
+from utils.data_loader import prepare_dataset
 from models.ECG_autoencoder import ECG_autoencoder
-from models.variational_autoencoder import Variational_autoencoder
+from pipeline import autoencoder as autoencoder_pipeline
+from models.variational_autoencoder import VariationalAutoencoder
 from utils.visualizations import draw_interpolation_grid, save_img_tensors_as_grid, visualize_ecg_reconstruction
 from utils.train_utils import (
     test_epoch,
@@ -30,7 +31,7 @@ def initialize_model(cfg: DictConfig, input_size):
     elif cfg.model.type == "ECG_AE":
         model = ECG_autoencoder(cfg, input_size)
     elif cfg.model.type == "VAE":
-        model = Variational_autoencoder(cfg, input_size)
+        model = VariationalAutoencoder(cfg, input_size)
     elif cfg.model.type == "VQ-VAE":
         model = VQVAE(cfg.vqvae)
     else:
@@ -40,7 +41,7 @@ def initialize_model(cfg: DictConfig, input_size):
 
 def train_model(
     cfg: DictConfig,
-    autoencoder: Autoencoder,
+    model: Autoencoder,
     loss_function: torch.nn.Module,
     train_loader: DataLoader,
     test_loader: DataLoader,
@@ -48,22 +49,22 @@ def train_model(
     torch.manual_seed(cfg.system.seed)
 
     if cfg.model.type == "ECG_AE":
-        train_ecg_autoencoder(cfg, autoencoder, loss_function, train_loader, test_loader)
+        train_ecg_autoencoder(cfg, model, loss_function, train_loader, test_loader)
     elif cfg.model.type == "VQ-VAE":
-        train_vqvae(cfg, autoencoder, loss_function, train_loader, test_loader)
+        train_vqvae(cfg, model, loss_function, train_loader, test_loader)
     else:
-        train_autoencoder(cfg, autoencoder, loss_function, train_loader, test_loader)
+        train_autoencoder(cfg, model, loss_function, train_loader, test_loader)
 
 
-def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
+def train_vqvae(cfg: DictConfig, model: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
     total_start_time = time.time()
     best_train_loss = float("inf")
-    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
-    for epoch in range(1, cfg.train.epochs + 1):
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
+    for epoch in range(cfg.train.epochs):
         start_time = time.time()
 
         avg_loss = train_epoch_vqvae(
-            autoencoder,
+            model,
             train_loader,
             optimizer,
             cfg.system.device,
@@ -74,12 +75,12 @@ def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.
             cfg.vqvae.use_ema,
             best_train_loss,
         )
-        avg_test_loss = test_epoch_vqvae(autoencoder, test_loader, cfg.system.device, loss_function, cfg.vqvae.beta)
+        avg_test_loss = test_epoch_vqvae(model, test_loader, cfg.system.device, loss_function, cfg.vqvae.beta)
 
         # save checkpoint
         checkpoint = {
             "epoch": epoch,
-            "model_state_dict": autoencoder.state_dict(),
+            "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Saving the config used for this training run
         }
@@ -104,29 +105,29 @@ def train_vqvae(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.
     wandb.log({"total_training_time": total_training_time})
 
 
-def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
+def train_ecg_autoencoder(cfg: DictConfig, model: Autoencoder, loss_function: torch.nn.Module, train_loader, test_loader):
     total_start_time = time.time()
     process = psutil.Process()
 
-    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
     for epoch in range(1, cfg.train.epochs + 1):
         start_time = time.time()
 
         avg_loss = train_epoch_ecg(
-            autoencoder,
+            model,
             train_loader,
             optimizer,
-            autoencoder.device,
+            model.device,
             cfg.train.log_interval,
             epoch,
             loss_function,
         )
-        avg_test_loss = test_epoch_ecg(autoencoder, test_loader, autoencoder.device, loss_function)
+        avg_test_loss = test_epoch_ecg(model, test_loader, model.device, loss_function)
 
         # save checkpoint
         checkpoint = {
             "epoch": epoch,
-            "model_state_dict": autoencoder.state_dict(),
+            "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Saving the config used for this training run
         }
@@ -147,7 +148,7 @@ def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_functi
         else:
             gpu_util = 0
 
-        first_layer = autoencoder.encoder.conv[0]
+        first_layer = model.encoder.conv[0]
 
         # Getting the weights of the first convolutional layer
         sample_weights = first_layer.weight.detach().cpu().numpy().flatten()
@@ -172,17 +173,16 @@ def train_ecg_autoencoder(cfg: DictConfig, autoencoder: Autoencoder, loss_functi
 
 def train_autoencoder(
     cfg: DictConfig,
-    autoencoder: Autoencoder,
+    model: Autoencoder,
     loss_function: torch.nn.Module,
     train_loader: DataLoader,
     test_loader: DataLoader,
 ):
-    total_start_time = time.time()
-    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
     for epoch in range(cfg.train.epochs):
         start_time = time.time()
         train_loss = train_epoch(
-            autoencoder=autoencoder,
+            model=model,
             train_loader=train_loader,
             optimizer=optimizer,
             device=cfg.system.device,
@@ -191,7 +191,7 @@ def train_autoencoder(
             loss_function=loss_function,
         )
         test_loss = test_epoch(
-            autoencoder=autoencoder,
+            model=model,
             test_loader=test_loader,
             device=cfg.system.device,
             loss_function=loss_function,
@@ -200,7 +200,7 @@ def train_autoencoder(
         # save checkpoint
         checkpoint = {
             "epoch": epoch,
-            "model_state_dict": autoencoder.state_dict(),
+            "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Saving the config used for this training run
         }
@@ -213,7 +213,7 @@ def train_autoencoder(
         epoch_duration = end_time - start_time  # in megabytes
 
         # Accessing the first convolutional layer of the encoder
-        first_layer = autoencoder.encoder.conv[0]
+        first_layer = model.encoder.conv[0]
 
         # Getting the weights of the first convolutional layer
         sample_weights = first_layer.weight.detach().cpu().numpy().flatten()
@@ -227,11 +227,6 @@ def train_autoencoder(
             }
         )
 
-    total_end_time = time.time()
-    total_training_time = total_end_time - total_start_time
-
-    wandb.log({"total_training_time": total_training_time})
-
 
 def train_multiple_models(cfg: DictConfig, range_begin: int, range_end: int, range_step: int):
     os.makedirs(cfg.logger.checkpoint_path + "/multiple/", exist_ok=True)
@@ -243,16 +238,17 @@ def train_multiple_models(cfg: DictConfig, range_begin: int, range_end: int, ran
         cfg.model.embedding_size = embedding_size
 
         # Reinitialize everything for the new embedding_size
-        train_loader, test_loader, input_size = get_data_loaders(cfg)
-        autoencoder = initialize_model(cfg, input_size)
+        # FIXME
+        train_loader, test_loader, input_size = prepare_dataset(cfg)
+        model = initialize_model(cfg, input_size)
 
         loss_function = prepare_loss_function(cfg.train)
-        optimizer = torch.optim.Adam(autoencoder.parameters(), lr=cfg.train.lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
         # Train for 5 epochs only
         for epoch in range(1, cfg.train.epochs + 1):
             train_epoch(
-                autoencoder,
+                model,
                 train_loader,
                 optimizer,
                 cfg.system.device,
@@ -261,7 +257,7 @@ def train_multiple_models(cfg: DictConfig, range_begin: int, range_end: int, ran
                 loss_function,
             )
             test_epoch(
-                autoencoder,
+                model,
                 test_loader,
                 cfg.system.device,
                 loss_function,
@@ -270,7 +266,7 @@ def train_multiple_models(cfg: DictConfig, range_begin: int, range_end: int, ran
         # Save only one checkpoint per model, after 5 epochs
         checkpoint = {
             "epoch": 5,
-            "model_state_dict": autoencoder.state_dict(),
+            "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "config": cfg,  # Save the config used for this run
         }
@@ -284,20 +280,26 @@ def main(cfg: DictConfig):
     os.makedirs(cfg.logger.results_path, exist_ok=True)
     os.makedirs(cfg.logger.checkpoint_path, exist_ok=True)
 
-    name = f"{cfg.dataset.name}_{cfg.run_date}"
     wandb.init(
-        project="autoencoder",
-        name=name,
+        project="autoencoders",
+        name=cfg.run_name,
         config=OmegaConf.to_container(cfg, resolve=True),
     )
 
-    train_loader, test_loader, input_size = get_data_loaders(cfg)
-    autoencoder = initialize_model(cfg, input_size)
+    if cfg.model.type == "AE":
+        autoencoder_pipeline.main(cfg)
+
+    train_dataset, test_dataset = prepare_dataset(cfg)
+    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
+
+    input_size = train_dataset.input_size
+    model = initialize_model(cfg, input_size)
 
     loss_function = prepare_loss_function(loss_function_name=cfg.train.loss_function)
     train_model(
         cfg=cfg,
-        autoencoder=autoencoder,
+        model=model,
         loss_function=loss_function,
         train_loader=train_loader,
         test_loader=test_loader,
@@ -305,10 +307,10 @@ def main(cfg: DictConfig):
 
     # Validation
     if cfg.model.type == "ECG_AE":
-        visualize_ecg_reconstruction(cfg, autoencoder, test_loader)
+        visualize_ecg_reconstruction(cfg, model, test_loader)
     elif cfg.model.type == "VQ-VAE" or cfg.dataset.name == "CIFAR10":
         save_img_tensors_as_grid(
-            model=autoencoder,
+            model=model,
             train_loader=test_loader,
             nrows=4,
             f=f"{cfg.logger.results_path}side_by_side_comparison",
@@ -316,7 +318,7 @@ def main(cfg: DictConfig):
             type=cfg.model.type,
         )
     else:
-        draw_interpolation_grid(cfg, autoencoder, test_loader)
+        draw_interpolation_grid(cfg, model, test_loader)
 
     if cfg.model.type == "VAE":
         vae_pipeline.main(cfg)
