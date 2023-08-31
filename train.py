@@ -12,7 +12,8 @@ from models.VQVAE import VQVAE
 from models.autoencoder import Autoencoder
 from utils.data_loader import prepare_dataset
 from models.ECG_autoencoder import ECG_autoencoder
-from pipeline import autoencoder as autoencoder_pipeline
+from pipeline.autoencoder import main as autoencoder_pipeline
+from pipeline.autoecgcoder import main as autoecgcoder_pipeline
 from models.variational_autoencoder import VariationalAutoencoder
 from utils.visualizations import draw_interpolation_grid, save_img_tensors_as_grid, visualize_ecg_reconstruction
 from utils.train_utils import (
@@ -289,6 +290,9 @@ def main(cfg: DictConfig):
 
     if cfg.model.type == "AE":
         autoencoder_pipeline.main(cfg)
+
+    if cfg.model.type == "ECG_AE":
+        autoecgcoder_pipeline.main(cfg)
 
     train_dataset, test_dataset = prepare_dataset(cfg)
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)

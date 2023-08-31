@@ -20,3 +20,5 @@ system:
 
 dataset:
   name: "ltafdb"
+
+run_name: ${model.type}-${dataset.name}-${now:%Y-%m-%d-%H-%M}
