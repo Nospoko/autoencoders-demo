@@ -9,12 +9,11 @@ from utils.utils import get_interpolations
 
 @torch.no_grad()
 def draw_interpolation_grid(cfg, autoencoder, test_loader):
-    for batch in test_loader:
-        if cfg.dataset.name == "MNIST" or cfg.dataset.name == "FashionMNIST" or cfg.dataset.name == "AmbiguousMNIST":
-            images = batch["image"].to(autoencoder.device) / 255.0
-        elif cfg.dataset.name == "CIFAR10":
-            images = batch["image"].to(autoencoder.device)
-        break  # Get the first batch for visualization purposes
+    batch = next(iter(test_loader))
+    if cfg.dataset.name == "MNIST" or cfg.dataset.name == "FashionMNIST" or cfg.dataset.name == "AmbiguousMNIST":
+        images = batch["image"].to(cfg.device) / 255.0
+    elif cfg.dataset.name == "CIFAR10":
+        images = batch["image"].to(cfg.device)
 
     images_per_row = 16
     interpolations = get_interpolations(cfg, autoencoder, autoencoder.device, images, images_per_row)

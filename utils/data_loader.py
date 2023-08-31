@@ -13,8 +13,25 @@ class SizedDataset(Dataset):
         self.dataset = dataset.with_format("torch")
         self.input_size = input_size
 
+    @property
+    def n_channels(self) -> int:
+        return self.input_size[0]
+
     def __getitem__(self, idx: int) -> dict:
-        return self.dataset[idx]
+        record = self.dataset[idx]
+        image = record["image"]
+        label = record["label"]
+
+        if self.n_channels == 1:
+            axis = 1 if isinstance(idx, slice) else 0
+            image = image.unsqueeze(axis)
+
+        out = {
+            "image": image,
+            "label": label,
+        }
+
+        return out
 
     def __len__(self) -> int:
         return len(self.dataset)

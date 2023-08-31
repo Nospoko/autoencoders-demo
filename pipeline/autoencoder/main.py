@@ -6,14 +6,16 @@ import torch.nn as nn
 from tqdm import tqdm
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
+from torchvision.utils import save_image
 
 import wandb
 from models.autoencoder import Autoencoder
 from utils.data_loader import prepare_dataset
 from utils.train_utils import prepare_loss_function
+from pipeline.autoencoder import evals as autoencoder_evals
 
 
-def main(cfg: DictConfig):
+def train(cfg: DictConfig) -> nn.Module:
     train_dataset, test_dataset = prepare_dataset(cfg)
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
@@ -82,6 +84,9 @@ def main(cfg: DictConfig):
             torch.save(checkpoint, checkpoint_path)
             best_test_loss = test_loss
 
+    print("Best checkpoint:", best_test_loss)
+    print("Checkpoint path:", checkpoint_path)
+
     return model
 
 
@@ -101,3 +106,15 @@ def forward_step(
     loss = loss_fn(recon_batch, data)
 
     return loss
+
+
+def main(cfg: DictConfig):
+    model = train(cfg)
+    train_dataset, test_dataset = prepare_dataset(cfg)
+
+    device = cfg.system.device
+    images = test_dataset[:20]["image"].to(device)
+
+    # Demo usage
+    grid = autoencoder_evals.make_interpolation_grid(model, images, n_interps=12)
+    save_image(grid, "tmp/tmp.png")

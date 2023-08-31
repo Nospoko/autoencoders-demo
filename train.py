@@ -9,7 +9,7 @@ from omegaconf import OmegaConf, DictConfig
 
 import wandb
 from models.VQVAE import VQVAE
-from models.model import Autoencoder
+from models.autoencoder import Autoencoder
 from utils.data_loader import prepare_dataset
 from models.ECG_autoencoder import ECG_autoencoder
 from pipeline import autoencoder as autoencoder_pipeline
