@@ -9,9 +9,12 @@ transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean
 
 
 class SizedDataset(Dataset):
-    def __init__(self, dataset: HFDataset, input_size: tuple[int, int, int]):
+    def __init__(self, dataset: HFDataset, input_size: tuple):
         self.dataset = dataset.with_format("torch")
         self.input_size = input_size
+
+        # I don't like this but what can you do
+        self.data_key = "image" if len(input_size) == 3 else "signal"
 
     @property
     def n_channels(self) -> int:
@@ -19,16 +22,15 @@ class SizedDataset(Dataset):
 
     def __getitem__(self, idx: int) -> dict:
         record = self.dataset[idx]
-        image = record["image"]
-        label = record["label"]
+        data = record[self.data_key]
 
-        if self.n_channels == 1:
+        # Grey images are missing the channel dim
+        if self.data_key == "image" and self.n_channels == 1:
             axis = 1 if isinstance(idx, slice) else 0
-            image = image.unsqueeze(axis)
+            data = data.unsqueeze(axis)
 
         out = {
-            "image": image,
-            "label": label,
+            self.data_key: data,
         }
 
         return out
