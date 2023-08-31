@@ -95,7 +95,7 @@ def forward_step(
     batch: dict,
     loss_fn: Callable,
     device: str,
-) -> torch.Tensor:
+):
     data = batch["image"].to(device) / 255.0
 
     # Hmm
@@ -113,10 +113,8 @@ def main(cfg: DictConfig):
     train_dataset, test_dataset = prepare_dataset(cfg)
 
     device = cfg.system.device
-    images = test_dataset[:20]["image"].to(device) / 255.0
+    images = test_dataset[:20]["image"].to(device)
 
     # Demo usage
     grid = autoencoder_evals.make_interpolation_grid(model, images, n_interps=12)
-    savepath = "tmp/tmp.png"
-    save_image(grid, savepath)
-    print("Saved an image!", savepath)
+    save_image(grid, "tmp/tmp.png")

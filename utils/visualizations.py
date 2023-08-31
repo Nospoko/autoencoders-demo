@@ -4,13 +4,13 @@ from PIL import Image
 from matplotlib import pyplot as plt
 
 
-def interpolate_embeddings(
-    left: torch.Tensor,
-    right: torch.Tensor,
-    num_interps: int,
-) -> torch.Tensor:
-    device = left.device
-    alpha = torch.linspace(0, 1, num_interps)[:, None].to(device)
+@torch.no_grad()
+def draw_interpolation_grid(cfg, autoencoder, test_loader):
+    batch = next(iter(test_loader))
+    if cfg.dataset.name == "MNIST" or cfg.dataset.name == "FashionMNIST" or cfg.dataset.name == "AmbiguousMNIST":
+        images = batch["image"].to(cfg.device) / 255.0
+    elif cfg.dataset.name == "CIFAR10":
+        images = batch["image"].to(cfg.device)
 
     interps = left * (1 - alpha) + right * alpha
     return interps
