@@ -3,12 +3,14 @@ import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 from omegaconf import DictConfig
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
 import wandb
 from utils.data_loader import prepare_dataset
 from models.autoencoder_ecg import AutoencoderECG
 from utils.train_utils import prepare_loss_function
+from pipeline.autoecgcoder import evals as autoeecgcoder_evals
 
 
 def train(cfg: DictConfig) -> nn.Module:
@@ -29,8 +31,9 @@ def train(cfg: DictConfig) -> nn.Module:
     epoch_progress = tqdm(range(cfg.train.epochs))
     for epoch in epoch_progress:
         model.train()
-        train_loss = 0
+        train_loss = []
 
+        # Train epoch
         train_progress = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
         for batch_idx, batch in train_progress:
             data = batch["signal"].to(device)
@@ -41,7 +44,7 @@ def train(cfg: DictConfig) -> nn.Module:
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
+            train_loss.append(loss.item())
 
             if step % cfg.train.log_interval == 0:
                 train_progress.set_postfix(loss=loss.item())
@@ -54,11 +57,13 @@ def train(cfg: DictConfig) -> nn.Module:
         test_loss = []
 
         with torch.no_grad():
-            for it, batch in enumerate(test_loader):
+            test_progress = tqdm(enumerate(test_loader), total=len(test_loader), leave=False)
+            for it, batch in test_progress:
                 recon_batch = model(data)
                 loss = loss_fn(recon_batch, data)
                 test_loss.append(loss.item())
 
+        # Epoch summary
         test_loss = np.mean(test_loss)
         train_loss = np.mean(train_loss)
         wandb.log({"train/loss_epoch": train_loss, "test/loss_epoch": test_loss}, step=step)
@@ -75,3 +80,19 @@ def train(cfg: DictConfig) -> nn.Module:
             best_test_loss = test_loss
 
     return model
+
+
+def main(cfg: DictConfig):
+    model = train(cfg).eval()
+
+    train_dataset, test_dataset = prepare_dataset(cfg)
+
+    device = cfg.system.device
+
+    n_samples = 16
+    idxs = np.random.randint(len(test_dataset), size=n_samples)
+    signals = test_dataset[idxs]["signal"].to(device)
+
+    autoeecgcoder_evals.draw_ecg_reconstructions(model, signals)
+    plt.tight_layout()
+    plt.savefig("tmp/tmp.png")
