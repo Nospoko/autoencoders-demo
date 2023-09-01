@@ -6,13 +6,11 @@ import torch.nn as nn
 from tqdm import tqdm
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image
 
 import wandb
-from models.autoencoder import Autoencoder
 from utils.data_loader import prepare_dataset
 from utils.train_utils import prepare_loss_function
-from pipeline.autoencoder import evals as autoencoder_evals
+from models.variational_autoencoder import VariationalAutoencoder
 
 
 def train(cfg: DictConfig) -> nn.Module:
@@ -20,11 +18,16 @@ def train(cfg: DictConfig) -> nn.Module:
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
 
+    device = cfg.system.device
     input_size = train_dataset.input_size
-    model = Autoencoder(embedding_size=cfg.model.embedding_size, input_size=input_size)
-    model.to(cfg.system.device)
-    loss_fn = prepare_loss_function(loss_function_name=cfg.train.loss_function)
+    model = VariationalAutoencoder(
+        input_size=input_size,
+        output_size=cfg.model.output_size,
+        embedding_size=cfg.model.embedding_size,
+    )
+    model = model.to(device)
 
+    loss_fn = prepare_loss_function(loss_function_name=cfg.train.loss_function)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
     step = 0
@@ -102,19 +105,7 @@ def forward_step(
     if len(data.shape) == 3:
         data = data.unsqueeze(1)
 
-    recon_batch = model(data)
-    loss = loss_fn(recon_batch, data)
+    recon_batch, mu, logvar = model(data)
+    loss = loss_fn(recon_batch, data, mu, logvar)
 
     return loss
-
-
-def main(cfg: DictConfig):
-    model = train(cfg)
-    train_dataset, test_dataset = prepare_dataset(cfg)
-
-    device = cfg.system.device
-    images = test_dataset[:20]["image"].to(device)
-
-    # Demo usage
-    grid = autoencoder_evals.make_interpolation_grid(model, images, n_interps=12)
-    save_image(grid, "tmp/tmp.png")

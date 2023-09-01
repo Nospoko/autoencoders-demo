@@ -9,18 +9,18 @@ from models.layers import CNN_Decoder, CNN_Encoder
 class VariationalAutoencoder(nn.Module):
     model_type: str = "VAE"
 
-    def __init__(self, cfg, input_size):
+    def __init__(self, output_size: int, embedding_size: int, input_size: tuple):
         super(VariationalAutoencoder, self).__init__()
-        self.cfg = cfg
         self.input_size = input_size
-        self.device = torch.device("cuda" if cfg.system.cuda and torch.cuda.is_available() else "cpu")
 
-        output_size = cfg.model.output_size  # Inspect this
+        # Encoder output size
+        self.output_size = output_size
+        self.encoder = CNN_Encoder(output_size=output_size, input_size=input_size)
 
-        self.encoder = CNN_Encoder(output_size, input_size=input_size)
-        self.var = nn.Linear(output_size, cfg.model.embedding_size)
-        self.mu = nn.Linear(output_size, cfg.model.embedding_size)
-        self.decoder = CNN_Decoder(cfg.model.embedding_size, input_size=input_size)
+        # From encoder to embedding
+        self.var = nn.Linear(output_size, embedding_size)
+        self.mu = nn.Linear(output_size, embedding_size)
+        self.decoder = CNN_Decoder(embedding_size, input_size=input_size)
 
     def encode(self, x):
         x = self.encoder(x)
