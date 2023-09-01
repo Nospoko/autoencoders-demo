@@ -15,7 +15,6 @@ def make_interpolation_grid(
     images: torch.Tensor,
     n_interps: int,
 ) -> torch.Tensor:
-    # Assuming square
     n_images = images.shape[0]
 
     model_input = images.view(n_images, -1).float()

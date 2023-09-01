@@ -9,10 +9,8 @@ model:
   type: "ECG_AE"
   embedding_size: 32
 
-logger:
-  results_path: "results/"
-  checkpoint_path: "checkpoints/"
-  enable_wandb: False
+results_path: "results/"
+checkpoint_path: "checkpoints/"
 
 system:
   device: "cuda:0"
