@@ -95,7 +95,7 @@ def forward_step(
     batch: dict,
     loss_fn: Callable,
     device: str,
-):
+) -> torch.Tensor:
     data = batch["image"].to(device) / 255.0
 
     # Hmm

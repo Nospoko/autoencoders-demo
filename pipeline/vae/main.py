@@ -1,15 +1,15 @@
+from typing import Callable
+
 import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
-import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image
 
 import wandb
-from pipeline.vae import evals as vae_evals
 from utils.data_loader import prepare_dataset
+from utils.train_utils import prepare_loss_function
 from models.variational_autoencoder import VariationalAutoencoder
 
 
@@ -22,17 +22,18 @@ def train(cfg: DictConfig) -> nn.Module:
     input_size = train_dataset.input_size
     model = VariationalAutoencoder(
         input_size=input_size,
-        encoder_output_size=cfg.model.output_size,
+        output_size=cfg.model.output_size,
         embedding_size=cfg.model.embedding_size,
     )
     model = model.to(device)
 
+    loss_fn = prepare_loss_function(loss_function_name=cfg.train.loss_function)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
     step = 0
     best_test_loss = float("inf")
-    epoch_progress = tqdm(range(cfg.train.epochs))
-    for epoch in epoch_progress:
+    epoch_progrss = tqdm(range(cfg.train.epochs))
+    for epoch in epoch_progrss:
         # Train epoch
         model.train()
 
@@ -40,25 +41,18 @@ def train(cfg: DictConfig) -> nn.Module:
         train_progress = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
         for it, batch in train_progress:
             optimizer.zero_grad()
-            losses = forward_step(
+            loss = forward_step(
                 model=model,
                 batch=batch,
+                loss_fn=loss_fn,
                 device=cfg.system.device,
             )
-            loss = losses["loss"]
             loss.backward()
             optimizer.step()
 
-            gradients = {}
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    gradients[f"gradients/{name}"] = param.grad.norm().item()
-            wandb.log(gradients, step=step)
-
             if step % cfg.train.log_interval == 0:
                 train_progress.set_postfix(loss=loss.item())
-                metrics = {f"train/{key}": value.item() for key, value in losses.items()}
-                wandb.log(metrics, step=step)
+                wandb.log({"train/loss": loss.item()}, step=step)
 
             train_loss.append(loss.item())
 
@@ -70,18 +64,18 @@ def train(cfg: DictConfig) -> nn.Module:
 
         with torch.no_grad():
             for it, batch in enumerate(test_loader):
-                losses = forward_step(
+                loss = forward_step(
                     model=model,
                     batch=batch,
+                    loss_fn=loss_fn,
                     device=cfg.system.device,
                 )
-                loss = losses["loss"]
                 test_loss.append(loss.item())
 
         test_loss = np.mean(test_loss)
         train_loss = np.mean(train_loss)
         wandb.log({"train/loss_epoch": train_loss, "test/loss_epoch": test_loss}, step=step)
-        epoch_progress.set_postfix(train_loss=train_loss, test_loss=test_loss)
+        epoch_progrss.set_postfix(train_loss=train_loss, test_loss=test_loss)
 
         if test_loss < best_test_loss:
             checkpoint = {
@@ -102,8 +96,9 @@ def train(cfg: DictConfig) -> nn.Module:
 def forward_step(
     model: nn.Module,
     batch: dict,
+    loss_fn: Callable,
     device: str,
-) -> dict[str, torch.Tensor]:
+) -> torch.Tensor:
     data = batch["image"].to(device) / 255.0
 
     # Hmm
@@ -111,29 +106,6 @@ def forward_step(
         data = data.unsqueeze(1)
 
     recon_batch, mu, logvar = model(data)
-    recon_loss = F.binary_cross_entropy(recon_batch, data, reduction="sum")
-    KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    loss = loss_fn(recon_batch, data, mu, logvar)
 
-    loss = recon_loss + KLD
-
-    losses = {
-        "loss": loss,
-        "KLD": KLD,
-        "recon": recon_loss,
-    }
-
-    return losses
-
-
-def main(cfg: DictConfig):
-    model = train(cfg)
-    train_dataset, test_dataset = prepare_dataset(cfg)
-
-    device = cfg.system.device
-    images = test_dataset[:20]["image"].to(device) / 255
-
-    # Demo usage
-    grid = vae_evals.make_interpolation_grid(model, images, n_interps=12)
-    savepath = "tmp/vae-interpolation.png"
-    save_image(grid, savepath)
-    print("Saved an image!", savepath)
+    return loss
