@@ -34,8 +34,8 @@ def train(cfg: DictConfig) -> nn.Module:
 
     step = 0
     best_test_loss = float("inf")
-    epoch_progrss = tqdm(range(cfg.train.epochs))
-    for epoch in epoch_progrss:
+    epoch_progress = tqdm(range(cfg.train.epochs))
+    for epoch in epoch_progress:
         # Train epoch
         model.train()
 
@@ -77,7 +77,7 @@ def train(cfg: DictConfig) -> nn.Module:
         test_loss = np.mean(test_loss)
         train_loss = np.mean(train_loss)
         wandb.log({"train/loss_epoch": train_loss, "test/loss_epoch": test_loss}, step=step)
-        epoch_progrss.set_postfix(train_loss=train_loss, test_loss=test_loss)
+        epoch_progress.set_postfix(train_loss=train_loss, test_loss=test_loss)
 
         if test_loss < best_test_loss:
             checkpoint = {

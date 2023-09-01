@@ -29,6 +29,13 @@ class SizedDataset(Dataset):
             axis = 1 if isinstance(idx, slice) else 0
             data = data.unsqueeze(axis)
 
+        # Special treatment for CIFAR
+        if self.dataset.builder_name == "cifar10":
+            if isinstance(idx, slice):
+                data = data.permute(0, 3, 2, 1)
+            else:
+                data = data.permute(2, 1, 0)
+
         out = {
             self.data_key: data,
         }
@@ -75,9 +82,6 @@ def prepare_dataset(cfg: DictConfig) -> tuple[SizedDataset, SizedDataset]:
 
     else:
         raise ValueError("Dataset not supported")
-
-    # train_loader = DataLoader(data["train"], batch_size=cfg.train.batch_size, shuffle=True)
-    # test_loader = DataLoader(data["test"], batch_size=cfg.train.batch_size, shuffle=False)
 
     train_dataset = SizedDataset(dataset=data["train"], input_size=input_size)
     test_dataset = SizedDataset(dataset=data["test"], input_size=input_size)

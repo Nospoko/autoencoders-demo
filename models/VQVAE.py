@@ -36,11 +36,11 @@ class ResidualStack(nn.Module):
 class Encoder(nn.Module):
     def __init__(
         self,
-        in_channels: int,
-        num_hiddens: int,
-        num_downsampling_layers: int,
-        num_residual_layers: int,
-        num_residual_hiddens: int,
+        in_channels,
+        num_hiddens,
+        num_downsampling_layers,
+        num_residual_layers,
+        num_residual_hiddens,
     ):
         super(Encoder, self).__init__()
 
@@ -79,11 +79,11 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        embedding_dim: int,
-        num_hiddens: int,
-        num_upsampling_layers: int,
-        num_residual_layers: int,
-        num_residual_hiddens: int,
+        embedding_dim,
+        num_hiddens,
+        num_upsampling_layers,
+        num_residual_layers,
+        num_residual_hiddens,
     ):
         super(Decoder, self).__init__()
 
@@ -130,13 +130,27 @@ class VQVAE(nn.Module):
         super().__init__()
 
         self.cfg = cfg
+        in_channels = cfg.in_channels
+        num_hiddens = cfg.num_hiddens
+
+        num_upsampling_layers = cfg.num_upsampling_layers
+        num_downsampling_layers = cfg.num_downsampling_layers
+        num_residual_layers = cfg.num_residual_layers
+        num_residual_hiddens = cfg.num_residual_hiddens
+
+        embedding_dim = cfg.embedding_dim
+        num_embeddings = cfg.num_embeddings
+
+        use_ema = cfg.use_ema
+        decay = cfg.decay
+        epsilon = cfg.epsilon
 
         self.encoder_layer = Encoder(
-            in_channels=cfg.in_channels,
-            num_hiddens=cfg.num_hiddens,
-            num_downsampling_layers=cfg.num_downsampling_layers,
-            num_residual_layers=cfg.num_residual_layers,
-            num_residual_hiddens=cfg.num_residual_hiddens,
+            in_channels=in_channels,
+            num_hiddens=num_hiddens,
+            num_downsampling_layers=num_downsampling_layers,
+            num_residual_layers=num_residual_layers,
+            num_residual_hiddens=num_residual_hiddens,
         )
         self.pre_vq_conv_layer = nn.Conv2d(
             in_channels=cfg.num_hiddens,
@@ -144,18 +158,18 @@ class VQVAE(nn.Module):
             kernel_size=1,
         )
         self.vector_quantizer = VectorQuantizer(
-            embedding_dim=cfg.embedding_dim,
-            num_embeddings=cfg.num_embeddings,
-            use_ema=cfg.use_ema,
-            decay=cfg.decay,
-            epsilon=cfg.epsilon,
+            embedding_dim=embedding_dim,
+            num_embeddings=num_embeddings,
+            use_ema=use_ema,
+            decay=decay,
+            epsilon=epsilon,
         )
         self.decoder_layer = Decoder(
-            embedding_dim=cfg.embedding_dim,
-            num_hiddens=cfg.num_hiddens,
-            num_upsampling_layers=cfg.num_upsampling_layers,
-            num_residual_layers=cfg.num_residual_layers,
-            num_residual_hiddens=cfg.num_residual_hiddens,
+            embedding_dim=embedding_dim,
+            num_hiddens=num_hiddens,
+            num_upsampling_layers=num_upsampling_layers,
+            num_residual_layers=num_residual_layers,
+            num_residual_hiddens=num_residual_hiddens,
         )
 
     def forward(self, x):
@@ -204,11 +218,11 @@ class SonnetExponentialMovingAverage(nn.Module):
 class VectorQuantizer(nn.Module):
     def __init__(
         self,
-        embedding_dim: int,
-        num_embeddings: int,
-        use_ema: bool,
-        decay: float,
-        epsilon: float,
+        embedding_dim,
+        num_embeddings,
+        use_ema,
+        decay,
+        epsilon,
     ):
         super().__init__()
         # See Section 3 of "Neural Discrete Representation Learning" and:
