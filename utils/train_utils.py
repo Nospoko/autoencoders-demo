@@ -58,8 +58,6 @@ def test_epoch(model, test_loader, device, loss_function):
         for batch_idx, batch in enumerate(test_loader):
             data = batch["image"].to(device) / 255.0
 
-            # if len(data.shape) == 4:
-            #     data = data.permute(0, 3, 1, 2)
             if len(data.shape) == 3:
                 data = data.unsqueeze(1)
 

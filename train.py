@@ -12,6 +12,7 @@ from models.VQVAE import VQVAE
 from models.autoencoder import Autoencoder
 from pipeline.vae import main as vae_pipeline
 from utils.data_loader import prepare_dataset
+from pipeline.vqvae import main as vqvae_pipeline
 from models.ECG_autoencoder import ECG_autoencoder
 from pipeline.autoencoder import main as autoencoder_pipeline
 from pipeline.autoecgcoder import main as autoecgcoder_pipeline
@@ -297,6 +298,9 @@ def main(cfg: DictConfig):
 
     if cfg.model.type == "VAE":
         vae_pipeline.main(cfg)
+
+    if cfg.model.type == "VQ-VAE":
+        vqvae_pipeline.main(cfg)
 
     train_dataset, test_dataset = prepare_dataset(cfg)
     train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)

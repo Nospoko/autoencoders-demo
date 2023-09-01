@@ -10,10 +10,8 @@ model:
   type: "VQ-VAE"
   embedding_size: 64
 
-logger:
-  results_path: "results/"
-  checkpoint_path: "checkpoints/"
-  enable_wandb: False
+results_path: "results/"
+checkpoint_path: "checkpoints/"
 
 system:
   device: "cuda:0"
@@ -26,6 +24,7 @@ vqvae:
     in_channels: 3
     num_hiddens: 128
     num_downsampling_layers: 2
+    num_upsampling_layers: 2
     num_residual_layers: 2
     num_residual_hiddens: 32
     embedding_dim: 64
@@ -36,3 +35,4 @@ vqvae:
     beta: 0.25
 
 run_date: ${now:%Y_%m_%d_%H_%M}
+run_name: ${model.type}-${dataset.name}-${now:%Y-%m-%d-%H-%M}

@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from omegaconf import DictConfig
 from torch.nn import functional as F
 
 
@@ -28,7 +29,14 @@ class ResidualStack(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
+    def __init__(
+        self,
+        in_channels,
+        num_hiddens,
+        num_downsampling_layers,
+        num_residual_layers,
+        num_residual_hiddens,
+    ):
         super(Encoder, self).__init__()
 
         # Initializations
@@ -62,7 +70,14 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embedding_dim, num_hiddens, num_upsampling_layers, num_residual_layers, num_residual_hiddens):
+    def __init__(
+        self,
+        embedding_dim,
+        num_hiddens,
+        num_upsampling_layers,
+        num_residual_layers,
+        num_residual_hiddens,
+    ):
         super(Decoder, self).__init__()
 
         # Initializations
@@ -99,65 +114,51 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, cfg, device):
+    def __init__(self, cfg: DictConfig):
         super().__init__()
 
+        self.cfg = cfg
         in_channels = cfg.in_channels
         num_hiddens = cfg.num_hiddens
+
+        num_upsampling_layers = cfg.num_upsampling_layers
         num_downsampling_layers = cfg.num_downsampling_layers
         num_residual_layers = cfg.num_residual_layers
         num_residual_hiddens = cfg.num_residual_hiddens
+
         embedding_dim = cfg.embedding_dim
         num_embeddings = cfg.num_embeddings
+
         use_ema = cfg.use_ema
         decay = cfg.decay
         epsilon = cfg.epsilon
 
-        self.device = torch.device("cuda" if device and torch.cuda.is_available() else "cpu")
-        print(self.device)
-
-        # Define layers in __init__
-        self.encoder_layer = self.build_encoder(
-            in_channels,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
+        self.encoder_layer = Encoder(
+            in_channels=in_channels,
+            num_hiddens=num_hiddens,
+            num_downsampling_layers=num_downsampling_layers,
+            num_residual_layers=num_residual_layers,
+            num_residual_hiddens=num_residual_hiddens,
         )
         self.pre_vq_conv_layer = nn.Conv2d(
             in_channels=num_hiddens,
             out_channels=embedding_dim,
             kernel_size=1,
         )
-        self.vector_quantizer = self.build_vector_quantizer(
-            embedding_dim,
-            num_embeddings,
-            use_ema,
-            decay,
-            epsilon,
+        self.vector_quantizer = VectorQuantizer(
+            embedding_dim=embedding_dim,
+            num_embeddings=num_embeddings,
+            use_ema=use_ema,
+            decay=decay,
+            epsilon=epsilon,
         )
-        self.decoder_layer = self.build_decoder(
-            embedding_dim,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
+        self.decoder_layer = Decoder(
+            embedding_dim=embedding_dim,
+            num_hiddens=num_hiddens,
+            num_upsampling_layers=num_upsampling_layers,
+            num_residual_layers=num_residual_layers,
+            num_residual_hiddens=num_residual_hiddens,
         )
-
-    def build_encoder(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
-        return Encoder(
-            in_channels,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
-        )
-
-    def build_vector_quantizer(self, embedding_dim, num_embeddings, use_ema, decay, epsilon):
-        return VectorQuantizer(embedding_dim, num_embeddings, use_ema, decay, epsilon)
-
-    def build_decoder(self, embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
-        return Decoder(embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens)
 
     def forward(self, x):
         # Use the layers in forward
@@ -203,7 +204,14 @@ class SonnetExponentialMovingAverage(nn.Module):
 
 
 class VectorQuantizer(nn.Module):
-    def __init__(self, embedding_dim, num_embeddings, use_ema, decay, epsilon):
+    def __init__(
+        self,
+        embedding_dim,
+        num_embeddings,
+        use_ema,
+        decay,
+        epsilon,
+    ):
         super().__init__()
         # See Section 3 of "Neural Discrete Representation Learning" and:
         # https://github.com/deepmind/sonnet/blob/v2/sonnet/src/nets/vqvae.py#L142.
