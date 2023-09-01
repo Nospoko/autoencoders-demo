@@ -6,8 +6,10 @@ import torch.nn as nn
 from tqdm import tqdm
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
+from torchvision.utils import save_image
 
 import wandb
+from pipeline.vae import evals as vae_evals
 from utils.data_loader import prepare_dataset
 from utils.train_utils import prepare_loss_function
 from models.variational_autoencoder import VariationalAutoencoder
@@ -109,3 +111,15 @@ def forward_step(
     loss = loss_fn(recon_batch, data, mu, logvar)
 
     return loss
+
+
+def main(cfg: DictConfig):
+    model = train(cfg)
+    train_dataset, test_dataset = prepare_dataset(cfg)
+
+    device = cfg.system.device
+    images = test_dataset[:20]["image"].to(device) / 255
+
+    # Demo usage
+    grid = vae_evals.make_interpolation_grid(model, images, n_interps=12)
+    save_image(grid, "tmp/tmp.png")
