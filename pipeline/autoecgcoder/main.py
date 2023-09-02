@@ -94,5 +94,7 @@ def main(cfg: DictConfig):
     signals = test_dataset[idxs]["signal"].to(device)
 
     autoeecgcoder_evals.draw_ecg_reconstructions(model, signals)
+    savepath = "tmp/tmp.png"
     plt.tight_layout()
-    plt.savefig("tmp/tmp.png")
+    plt.savefig(savepath)
+    print("Saved an image!", savepath)

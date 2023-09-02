@@ -117,4 +117,6 @@ def main(cfg: DictConfig):
 
     # Demo usage
     grid = autoencoder_evals.make_interpolation_grid(model, images, n_interps=12)
-    save_image(grid, "tmp/tmp.png")
+    savepath = "tmp/tmp.png"
+    save_image(grid, savepath)
+    print("Saved an image!", savepath)

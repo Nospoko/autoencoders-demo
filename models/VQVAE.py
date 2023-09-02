@@ -161,8 +161,8 @@ class VQVAE(nn.Module):
     def forward(self, x):
         # Use the layers in forward
         encoded_x = self.encoder_layer(x)
-
         pre_vq_x = self.pre_vq_conv_layer(encoded_x)
+
         (
             quantized_x,
             dictionary_loss,
@@ -204,27 +204,29 @@ class SonnetExponentialMovingAverage(nn.Module):
 class VectorQuantizer(nn.Module):
     def __init__(
         self,
-        embedding_dim,
-        num_embeddings,
-        use_ema,
-        decay,
-        epsilon,
+        embedding_dim: int,
+        num_embeddings: int,
+        use_ema: bool,
+        decay: float,
+        epsilon: float,
     ):
         super().__init__()
         # See Section 3 of "Neural Discrete Representation Learning" and:
         # https://github.com/deepmind/sonnet/blob/v2/sonnet/src/nets/vqvae.py#L142.
-
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
         self.use_ema = use_ema
+
         # Weight for the exponential moving average.
         self.decay = decay
+
         # Small constant to avoid numerical instability in embedding updates.
         self.epsilon = epsilon
 
         # Dictionary embeddings.
         limit = 3**0.5
         e_i_ts = torch.FloatTensor(embedding_dim, num_embeddings).uniform_(-limit, limit)
+
         if use_ema:
             self.register_buffer("e_i_ts", e_i_ts)
         else:
@@ -236,12 +238,32 @@ class VectorQuantizer(nn.Module):
         self.m_i_ts = SonnetExponentialMovingAverage(decay, e_i_ts.shape)
 
     def forward(self, x):
+        # 1. Flatten x to have shape (batch_size * H * W, C)
         flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
-        distances = (flat_x**2).sum(1, keepdim=True) - 2 * flat_x @ self.e_i_ts + (self.e_i_ts**2).sum(0, keepdim=True)
-        encoding_indices = distances.argmin(1)
-        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1)).permute(
-            0, 3, 1, 2
-        )
+
+        # Calculate the sum of squares for each row of flat_x
+        flat_x_squared = (flat_x**2).sum(dim=1, keepdim=True)
+
+        # Compute the inner product of flat_x with e_i_ts
+        inner_product = flat_x @ self.e_i_ts
+
+        # Calculate the sum of squares for e_i_ts
+        e_i_ts_squared = (self.e_i_ts**2).sum(dim=0, keepdim=True)
+
+        # Combine the results to get the squared distances
+        distances = flat_x_squared - 2 * inner_product + e_i_ts_squared
+
+        # Find the indices of the smallest distances (encoding indices)
+        encoding_indices = distances.argmin(dim=1)
+
+        # Reshape the encoding indices to the shape of (batch_size, H, W)
+        reshaped_indices = encoding_indices.view(x.shape[0], *x.shape[2:])
+
+        # Get the encoded/quantized version of x from e_i_ts using the reshaped indices
+        quantized_intermediate = F.embedding(reshaped_indices, self.e_i_ts.transpose(0, 1))
+
+        # Reorder the dimensions to match the original shape of x
+        quantized_x = quantized_intermediate.permute(0, 3, 1, 2)
 
         # See second term of Equation (3).
         if not self.use_ema:
@@ -251,6 +273,7 @@ class VectorQuantizer(nn.Module):
 
         # See third term of Equation (3).
         commitment_loss = ((x - quantized_x.detach()) ** 2).mean()
+
         # Straight-through gradient. See Section 3.2.
         quantized_x = x + (quantized_x - x).detach()
 
