@@ -204,11 +204,11 @@ class SonnetExponentialMovingAverage(nn.Module):
 class VectorQuantizer(nn.Module):
     def __init__(
         self,
-        embedding_dim,
-        num_embeddings,
-        use_ema,
-        decay,
-        epsilon,
+        embedding_dim: int,
+        num_embeddings: int,
+        use_ema: bool,
+        decay: float,
+        epsilon: float,
     ):
         super().__init__()
         # See Section 3 of "Neural Discrete Representation Learning" and:
