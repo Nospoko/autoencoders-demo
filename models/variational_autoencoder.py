@@ -7,8 +7,6 @@ from models.layers import CNN_Decoder, CNN_Encoder
 
 
 class VariationalAutoencoder(nn.Module):
-    model_type: str = "VAE"
-
     def __init__(self, output_size: int, embedding_size: int, input_size: tuple):
         super(VariationalAutoencoder, self).__init__()
         self.input_size = input_size
