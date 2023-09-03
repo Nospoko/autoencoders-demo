@@ -4,8 +4,6 @@ from models.layers import CNN_Decoder, CNN_Encoder
 
 
 class Autoencoder(nn.Module):
-    model_type: str = "AE"
-
     def __init__(self, embedding_size: int, input_size: tuple):
         super(Autoencoder, self).__init__()
         self.input_size = input_size

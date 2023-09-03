@@ -1,17 +1,11 @@
 import torch
-import torch.nn as nn
 
-
-def interpolate(left: torch.Tensor, right: torch.Tensor, num_interps: int) -> torch.Tensor:
-    device = left.device
-    alpha = torch.linspace(0, 1, num_interps)[:, None].to(device)
-
-    interps = left * (1 - alpha) + right * alpha
-    return interps
+from models.autoencoder import Autoencoder
+from utils.visualizations import interpolate_embeddings
 
 
 def make_interpolation_grid(
-    model: nn.Module,
+    model: Autoencoder,
     images: torch.Tensor,
     n_interps: int,
 ) -> torch.Tensor:
@@ -24,7 +18,7 @@ def make_interpolation_grid(
     for it in range(n_images - 1):
         left = embeddings[it]
         right = embeddings[it + 1]
-        interpolated_embeddings = interpolate(
+        interpolated_embeddings = interpolate_embeddings(
             left=left,
             right=right,
             num_interps=n_interps,
