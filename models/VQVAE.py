@@ -1,10 +1,16 @@
 import torch
 from torch import nn
+from omegaconf import DictConfig
 from torch.nn import functional as F
 
 
 class ResidualStack(nn.Module):
-    def __init__(self, num_hiddens, num_residual_layers, num_residual_hiddens):
+    def __init__(
+        self,
+        num_hiddens: int,
+        num_residual_layers: int,
+        num_residual_hiddens: int,
+    ):
         super(ResidualStack, self).__init__()
         # Section 4.1 of the paper
         self.layers = nn.ModuleList()
@@ -13,9 +19,9 @@ class ResidualStack(nn.Module):
             self.layers.append(
                 nn.Sequential(
                     nn.ReLU(),
-                    nn.Conv2d(num_hiddens, num_residual_hiddens, kernel_size=3, padding=1),
+                    nn.Conv2d(in_channels=num_hiddens, out_channels=num_residual_hiddens, kernel_size=3, padding=1),
                     nn.ReLU(),
-                    nn.Conv2d(num_residual_hiddens, num_hiddens, kernel_size=1),
+                    nn.Conv2d(in_channels=num_residual_hiddens, out_channels=num_hiddens, kernel_size=1),
                 )
             )
 
@@ -28,18 +34,24 @@ class ResidualStack(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
+    def __init__(
+        self,
+        in_channels: int,
+        num_hiddens: int,
+        num_downsampling_layers: int,
+        num_residual_layers: int,
+        num_residual_hiddens: int,
+    ):
         super(Encoder, self).__init__()
 
         # Initializations
         self.downsampling_layers = nn.ModuleList()
-        self.residual_stack = ResidualStack(num_hiddens, num_residual_layers, num_residual_hiddens)
 
         # Layer Definitions
-        for i in range(num_downsampling_layers):
-            if i == 0:
+        for it in range(num_downsampling_layers):
+            if it == 0:
                 out_channels = num_hiddens // 2
-            elif i == 1:
+            elif it == 1:
                 in_channels, out_channels = num_hiddens // 2, num_hiddens
             else:
                 in_channels, out_channels = num_hiddens, num_hiddens
@@ -50,7 +62,9 @@ class Encoder(nn.Module):
                 )
             )
 
+        # "Final" as in "ending downsamping"
         self.final_conv = nn.Conv2d(in_channels=num_hiddens, out_channels=num_hiddens, kernel_size=3, padding=1)
+        self.residual_stack = ResidualStack(num_hiddens, num_residual_layers, num_residual_hiddens)
 
     def forward(self, x):
         # Forward Pass
@@ -58,32 +72,45 @@ class Encoder(nn.Module):
             x = layer(x)
 
         x = self.final_conv(x)
-        return self.residual_stack(x)
+        x = self.residual_stack(x)
+        return x
 
 
 class Decoder(nn.Module):
-    def __init__(self, embedding_dim, num_hiddens, num_upsampling_layers, num_residual_layers, num_residual_hiddens):
+    def __init__(
+        self,
+        embedding_dim: int,
+        num_hiddens: int,
+        num_upsampling_layers: int,
+        num_residual_layers: int,
+        num_residual_hiddens: int,
+    ):
         super(Decoder, self).__init__()
-
-        # Initializations
-        self.upsampling_layers = nn.ModuleList()
-        self.residual_stack = ResidualStack(num_hiddens, num_residual_layers, num_residual_hiddens)
 
         # Layer Definitions
         self.initial_conv = nn.Conv2d(in_channels=embedding_dim, out_channels=num_hiddens, kernel_size=3, padding=1)
+        self.residual_stack = ResidualStack(num_hiddens, num_residual_layers, num_residual_hiddens)
 
-        for i in range(num_upsampling_layers):
-            if i < num_upsampling_layers - 2:
+        self.upsampling_layers = nn.ModuleList()
+        for it in range(num_upsampling_layers):
+            if it < num_upsampling_layers - 2:
                 in_channels, out_channels = num_hiddens, num_hiddens
-            elif i == num_upsampling_layers - 2:
+            elif it == num_upsampling_layers - 2:
                 in_channels, out_channels = num_hiddens, num_hiddens // 2
             else:
+                # Only the last layer (it > num_upsampling_layers - 2)
                 in_channels, out_channels = num_hiddens // 2, 3
 
             self.upsampling_layers.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(in_channels=in_channels, out_channels=out_channels, kernel_size=4, stride=2, padding=1),
-                    nn.ReLU() if i < num_upsampling_layers - 1 else nn.Identity(),
+                    nn.ConvTranspose2d(
+                        in_channels=in_channels,
+                        out_channels=out_channels,
+                        kernel_size=4,
+                        stride=2,
+                        padding=1,
+                    ),
+                    nn.ReLU() if it < num_upsampling_layers - 1 else nn.Identity(),
                 )
             )
 
@@ -99,71 +126,43 @@ class Decoder(nn.Module):
 
 
 class VQVAE(nn.Module):
-    def __init__(self, cfg, device):
+    def __init__(self, cfg: DictConfig):
         super().__init__()
 
-        in_channels = cfg.in_channels
-        num_hiddens = cfg.num_hiddens
-        num_downsampling_layers = cfg.num_downsampling_layers
-        num_residual_layers = cfg.num_residual_layers
-        num_residual_hiddens = cfg.num_residual_hiddens
-        embedding_dim = cfg.embedding_dim
-        num_embeddings = cfg.num_embeddings
-        use_ema = cfg.use_ema
-        decay = cfg.decay
-        epsilon = cfg.epsilon
+        self.cfg = cfg
 
-        self.device = torch.device("cuda" if device and torch.cuda.is_available() else "cpu")
-        print(self.device)
-
-        # Define layers in __init__
-        self.encoder_layer = self.build_encoder(
-            in_channels,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
+        self.encoder_layer = Encoder(
+            in_channels=cfg.in_channels,
+            num_hiddens=cfg.num_hiddens,
+            num_downsampling_layers=cfg.num_downsampling_layers,
+            num_residual_layers=cfg.num_residual_layers,
+            num_residual_hiddens=cfg.num_residual_hiddens,
         )
         self.pre_vq_conv_layer = nn.Conv2d(
-            in_channels=num_hiddens,
-            out_channels=embedding_dim,
+            in_channels=cfg.num_hiddens,
+            out_channels=cfg.embedding_dim,
             kernel_size=1,
         )
-        self.vector_quantizer = self.build_vector_quantizer(
-            embedding_dim,
-            num_embeddings,
-            use_ema,
-            decay,
-            epsilon,
+        self.vector_quantizer = VectorQuantizer(
+            embedding_dim=cfg.embedding_dim,
+            num_embeddings=cfg.num_embeddings,
+            use_ema=cfg.use_ema,
+            decay=cfg.decay,
+            epsilon=cfg.epsilon,
         )
-        self.decoder_layer = self.build_decoder(
-            embedding_dim,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
+        self.decoder_layer = Decoder(
+            embedding_dim=cfg.embedding_dim,
+            num_hiddens=cfg.num_hiddens,
+            num_upsampling_layers=cfg.num_upsampling_layers,
+            num_residual_layers=cfg.num_residual_layers,
+            num_residual_hiddens=cfg.num_residual_hiddens,
         )
-
-    def build_encoder(self, in_channels, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
-        return Encoder(
-            in_channels,
-            num_hiddens,
-            num_downsampling_layers,
-            num_residual_layers,
-            num_residual_hiddens,
-        )
-
-    def build_vector_quantizer(self, embedding_dim, num_embeddings, use_ema, decay, epsilon):
-        return VectorQuantizer(embedding_dim, num_embeddings, use_ema, decay, epsilon)
-
-    def build_decoder(self, embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens):
-        return Decoder(embedding_dim, num_hiddens, num_downsampling_layers, num_residual_layers, num_residual_hiddens)
 
     def forward(self, x):
         # Use the layers in forward
         encoded_x = self.encoder_layer(x)
-
         pre_vq_x = self.pre_vq_conv_layer(encoded_x)
+
         (
             quantized_x,
             dictionary_loss,
@@ -203,22 +202,31 @@ class SonnetExponentialMovingAverage(nn.Module):
 
 
 class VectorQuantizer(nn.Module):
-    def __init__(self, embedding_dim, num_embeddings, use_ema, decay, epsilon):
+    def __init__(
+        self,
+        embedding_dim: int,
+        num_embeddings: int,
+        use_ema: bool,
+        decay: float,
+        epsilon: float,
+    ):
         super().__init__()
         # See Section 3 of "Neural Discrete Representation Learning" and:
         # https://github.com/deepmind/sonnet/blob/v2/sonnet/src/nets/vqvae.py#L142.
-
         self.embedding_dim = embedding_dim
         self.num_embeddings = num_embeddings
         self.use_ema = use_ema
+
         # Weight for the exponential moving average.
         self.decay = decay
+
         # Small constant to avoid numerical instability in embedding updates.
         self.epsilon = epsilon
 
         # Dictionary embeddings.
         limit = 3**0.5
         e_i_ts = torch.FloatTensor(embedding_dim, num_embeddings).uniform_(-limit, limit)
+
         if use_ema:
             self.register_buffer("e_i_ts", e_i_ts)
         else:
@@ -230,12 +238,32 @@ class VectorQuantizer(nn.Module):
         self.m_i_ts = SonnetExponentialMovingAverage(decay, e_i_ts.shape)
 
     def forward(self, x):
+        # 1. Flatten x to have shape (batch_size * H * W, C)
         flat_x = x.permute(0, 2, 3, 1).reshape(-1, self.embedding_dim)
-        distances = (flat_x**2).sum(1, keepdim=True) - 2 * flat_x @ self.e_i_ts + (self.e_i_ts**2).sum(0, keepdim=True)
-        encoding_indices = distances.argmin(1)
-        quantized_x = F.embedding(encoding_indices.view(x.shape[0], *x.shape[2:]), self.e_i_ts.transpose(0, 1)).permute(
-            0, 3, 1, 2
-        )
+
+        # Calculate the sum of squares for each row of flat_x
+        flat_x_squared = (flat_x**2).sum(dim=1, keepdim=True)
+
+        # Compute the inner product of flat_x with e_i_ts
+        inner_product = flat_x @ self.e_i_ts
+
+        # Calculate the sum of squares for e_i_ts
+        e_i_ts_squared = (self.e_i_ts**2).sum(dim=0, keepdim=True)
+
+        # Combine the results to get the squared distances
+        distances = flat_x_squared - 2 * inner_product + e_i_ts_squared
+
+        # Find the indices of the smallest distances (encoding indices)
+        encoding_indices = distances.argmin(dim=1)
+
+        # Reshape the encoding indices to the shape of (batch_size, H, W)
+        reshaped_indices = encoding_indices.view(x.shape[0], *x.shape[2:])
+
+        # Get the encoded/quantized version of x from e_i_ts using the reshaped indices
+        quantized_intermediate = F.embedding(reshaped_indices, self.e_i_ts.transpose(0, 1))
+
+        # Reorder the dimensions to match the original shape of x
+        quantized_x = quantized_intermediate.permute(0, 3, 1, 2)
 
         # See second term of Equation (3).
         if not self.use_ema:
@@ -245,6 +273,7 @@ class VectorQuantizer(nn.Module):
 
         # See third term of Equation (3).
         commitment_loss = ((x - quantized_x.detach()) ** 2).mean()
+
         # Straight-through gradient. See Section 3.2.
         quantized_x = x + (quantized_x - x).detach()
 

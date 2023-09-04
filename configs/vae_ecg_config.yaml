@@ -2,12 +2,13 @@ train:
   batch_size: 128
   epochs: 10
   log_interval: 50
-  lr: 0.001
-  loss_function: "MSE"
+  lr: 1e-4
+  loss_function: "VAE_MSE"
 
 model:
-  type: "ECG_AE"
-  embedding_size: 32
+  type: "ECG_VAE"
+  encoder_output_size: 256
+  embedding_size: 64
 
 results_path: "results/"
 checkpoint_path: "checkpoints/"

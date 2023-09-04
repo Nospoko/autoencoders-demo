@@ -6,19 +6,19 @@ import torch.nn.functional as F
 from models.layers import CNN_Decoder, CNN_Encoder
 
 
-class Variational_autoencoder(nn.Module):
-    def __init__(self, cfg, input_size):
-        super(Variational_autoencoder, self).__init__()
-        self.cfg = cfg
+class VariationalAutoencoder(nn.Module):
+    def __init__(self, encoder_output_size: int, embedding_size: int, input_size: tuple):
+        super(VariationalAutoencoder, self).__init__()
         self.input_size = input_size
-        self.device = torch.device("cuda" if cfg.system.cuda and torch.cuda.is_available() else "cpu")
 
-        output_size = cfg.model.output_size  # Inspect this
+        # Encoder output size
+        self.encoder_output_size = encoder_output_size
+        self.encoder = CNN_Encoder(output_size=encoder_output_size, input_size=input_size)
 
-        self.encoder = CNN_Encoder(output_size, input_size=input_size)
-        self.var = nn.Linear(output_size, cfg.model.embedding_size)
-        self.mu = nn.Linear(output_size, cfg.model.embedding_size)
-        self.decoder = CNN_Decoder(cfg.model.embedding_size, input_size=input_size)
+        # From encoder to embedding
+        self.var = nn.Linear(encoder_output_size, embedding_size)
+        self.mu = nn.Linear(encoder_output_size, embedding_size)
+        self.decoder = CNN_Decoder(embedding_size, input_size=input_size)
 
     def encode(self, x):
         x = self.encoder(x)
@@ -39,13 +39,17 @@ class Variational_autoencoder(nn.Module):
 
 
 class VAELoss(nn.Module):
-    def __init__(self):
-        super(VAELoss, self).__init__()
+    def __init__(self, recon_loss: str = "BCE"):
+        super().__init__()
+        self.recon_loss = recon_loss
 
     def forward(self, recon_x, x, mu, logvar):
-        BCE = F.binary_cross_entropy(recon_x, x, reduction="sum")
+        if self.recon_loss == "BCE":
+            recon_loss = F.binary_cross_entropy(recon_x, x, reduction="mean")
+        elif self.recon_loss == "MSE":
+            recon_loss = F.mse_loss(recon_x, x, reduction="mean")
 
         # KL divergence
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-        return BCE + KLD
+        return recon_loss + KLD

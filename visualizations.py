@@ -1,6 +1,7 @@
 import torch
 import imageio
 import numpy as np
+from omegaconf import DictConfig
 from matplotlib import pyplot as plt
 from torchvision.utils import save_image
 
@@ -8,17 +9,16 @@ from utils import get_interpolations
 
 
 @torch.no_grad()
-def draw_interpolation_grid(cfg, autoencoder, test_loader):
-    for batch in test_loader:
-        images = batch["image"].to(autoencoder.device) / 255.0
-        break  # Get the first batch for visualization purposes
+def draw_interpolation_grid(cfg: DictConfig, autoencoder, test_loader):
+    batch = next(iter(test_loader))
+    images = batch["image"].to(cfg.system.device) / 255.0
 
     images_per_row = 16
-    interpolations = get_interpolations(cfg, autoencoder, autoencoder.device, images, images_per_row)
+    interpolations = get_interpolations(cfg, autoencoder, cfg.system.device, images, images_per_row)
 
     img_dim = images.shape[-2]
     channels = 3 if img_dim == 32 else 1
-    sample = torch.randn(64, cfg.model.embedding_size).to(autoencoder.device)
+    sample = torch.randn(64, cfg.model.embedding_size).to(cfg.system.device)
     sample = autoencoder.decode(sample).cpu()
 
     # Adjust the reshape based on channels and img_dim
