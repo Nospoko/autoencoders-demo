@@ -6,6 +6,7 @@ from omegaconf import OmegaConf, DictConfig
 import wandb
 from pipeline.vae import main as vae_pipeline
 from pipeline.vqvae import main as vqvae_pipeline
+from pipeline.vae_ecg import main as vae_ecg_pipeline
 from pipeline.autoencoder import main as autoencoder_pipeline
 from pipeline.autoecgcoder import main as autoecgcoder_pipeline
 
@@ -33,6 +34,9 @@ def main(cfg: DictConfig):
 
     if cfg.model.type == "VQ-VAE":
         vqvae_pipeline.main(cfg)
+
+    if cfg.model.type == "ECG_VAE":
+        vae_ecg_pipeline.main(cfg)
 
 
 if __name__ == "__main__":

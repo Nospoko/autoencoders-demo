@@ -1,15 +1,14 @@
 train:
-  batch_size: 32
+  batch_size: 128
   epochs: 10
   log_interval: 50
   lr: 1e-4
-  loss_function: "VAE"
-  shuffle: True
+  loss_function: "VAE_MSE"
 
 model:
-  type: "VAE"
+  type: "ECG_VAE"
+  encoder_output_size: 256
   embedding_size: 64
-  output_size: 512
 
 results_path: "results/"
 checkpoint_path: "checkpoints/"
@@ -19,7 +18,6 @@ system:
   seed: 42
 
 dataset:
-  name: "MNIST"
+  name: "ltafdb"
 
-run_date: ${now:%Y_%m_%d_%H_%M}
 run_name: ${model.type}-${dataset.name}-${now:%Y-%m-%d-%H-%M}

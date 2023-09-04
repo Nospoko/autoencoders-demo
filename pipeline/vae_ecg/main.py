@@ -2,15 +2,13 @@ import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
-import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
-from torchvision.utils import save_image
 
 import wandb
-from pipeline.vae import evals as vae_evals
 from utils.data_loader import prepare_dataset
-from models.variational_autoencoder import VariationalAutoencoder
+from utils.train_utils import prepare_loss_function
+from models.autoencoder_ecg import VariationalAutoencoderECG
 
 
 def train(cfg: DictConfig) -> nn.Module:
@@ -20,41 +18,39 @@ def train(cfg: DictConfig) -> nn.Module:
 
     device = cfg.system.device
     input_size = train_dataset.input_size
-    model = VariationalAutoencoder(
-        input_size=input_size,
-        encoder_output_size=cfg.model.output_size,
+    model = VariationalAutoencoderECG(
+        encoder_output_size=cfg.model.encoder_output_size,
         embedding_size=cfg.model.embedding_size,
+        input_size=input_size,
     )
     model = model.to(device)
 
+    loss_fn = prepare_loss_function(loss_function_name=cfg.train.loss_function)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
     step = 0
     best_test_loss = float("inf")
     epoch_progress = tqdm(range(cfg.train.epochs))
     for epoch in epoch_progress:
-        # Train epoch
         model.train()
-
         train_loss = []
+
+        # Train epoch
         train_progress = tqdm(enumerate(train_loader), total=len(train_loader), leave=False)
-        for it, batch in train_progress:
+        for batch_idx, batch in train_progress:
+            data = batch["signal"].to(device)
             optimizer.zero_grad()
-            losses = forward_step(
-                model=model,
-                batch=batch,
-                device=cfg.system.device,
-            )
-            loss = losses["loss"]
+
+            recon_batch, mu, logvar = model(data)
+            loss = loss_fn(recon_batch, data, mu, logvar)
             loss.backward()
             optimizer.step()
 
+            train_loss.append(loss.item())
+
             if step % cfg.train.log_interval == 0:
                 train_progress.set_postfix(loss=loss.item())
-                metrics = {f"train/{key}": value.item() for key, value in losses.items()}
-                wandb.log(metrics, step=step)
-
-            train_loss.append(loss.item())
+                wandb.log({"train/loss": loss.item()}, step=step)
 
             step += 1
 
@@ -63,15 +59,14 @@ def train(cfg: DictConfig) -> nn.Module:
         test_loss = []
 
         with torch.no_grad():
-            for it, batch in enumerate(test_loader):
-                losses = forward_step(
-                    model=model,
-                    batch=batch,
-                    device=cfg.system.device,
-                )
-                loss = losses["loss"]
+            test_progress = tqdm(enumerate(test_loader), total=len(test_loader), leave=False)
+            for it, batch in test_progress:
+                data = batch["signal"].to(device)
+                recon_batch, mu, logvar = model(data)
+                loss = loss_fn(recon_batch, data, mu, logvar)
                 test_loss.append(loss.item())
 
+        # Epoch summary
         test_loss = np.mean(test_loss)
         train_loss = np.mean(train_loss)
         wandb.log({"train/loss_epoch": train_loss, "test/loss_epoch": test_loss}, step=step)
@@ -87,47 +82,8 @@ def train(cfg: DictConfig) -> nn.Module:
             torch.save(checkpoint, checkpoint_path)
             best_test_loss = test_loss
 
-    print("Best checkpoint:", best_test_loss)
-    print("Checkpoint path:", checkpoint_path)
-
     return model
 
 
-def forward_step(
-    model: nn.Module,
-    batch: dict,
-    device: str,
-) -> dict[str, torch.Tensor]:
-    data = batch["image"].to(device) / 255.0
-
-    # Hmm
-    if len(data.shape) == 3:
-        data = data.unsqueeze(1)
-
-    recon_batch, mu, logvar = model(data)
-    recon_loss = F.binary_cross_entropy(recon_batch, data, reduction="mean")
-    KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-
-    loss = recon_loss + KLD
-
-    losses = {
-        "loss": loss,
-        "KLD": KLD,
-        "recon": recon_loss,
-    }
-
-    return losses
-
-
 def main(cfg: DictConfig):
-    model = train(cfg)
-    train_dataset, test_dataset = prepare_dataset(cfg)
-
-    device = cfg.system.device
-    images = test_dataset[:20]["image"].to(device) / 255
-
-    # Demo usage
-    grid = vae_evals.make_interpolation_grid(model, images, n_interps=12)
-    savepath = "tmp/tmp.png"
-    save_image(grid, savepath)
-    print("Saved an image!", savepath)
+    _ = train(cfg)

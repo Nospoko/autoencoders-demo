@@ -80,6 +80,8 @@ def prepare_loss_function(loss_function_name: str):
         return torch.nn.MSELoss()
     elif loss_function_name == "VAE":
         return VAELoss()
+    elif loss_function_name == "VAE_MSE":
+        return VAELoss(recon_loss="MSE")
 
     raise ValueError(f"Invalid loss function: {loss_function_name}. Available options are: 'BCE', 'MSE', 'VAE'.")
 
