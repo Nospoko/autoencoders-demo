@@ -128,6 +128,6 @@ def main(cfg: DictConfig):
 
     # Demo usage
     grid = vae_evals.make_interpolation_grid(model, images, n_interps=12)
-    savepath = "tmp/tmp.png"
+    savepath = "tmp/vae-interpolation.png"
     save_image(grid, savepath)
     print("Saved an image!", savepath)
