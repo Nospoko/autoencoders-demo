@@ -113,7 +113,7 @@ def main(cfg: DictConfig):
     train_dataset, test_dataset = prepare_dataset(cfg)
 
     device = cfg.system.device
-    images = test_dataset[:20]["image"].to(device)
+    images = test_dataset[:20]["image"].to(device) / 255.0
 
     # Demo usage
     grid = autoencoder_evals.make_interpolation_grid(model, images, n_interps=12)
