@@ -94,7 +94,13 @@ def main(cfg: DictConfig):
     signals = test_dataset[idxs]["signal"].to(device)
 
     autoeecgcoder_evals.draw_ecg_reconstructions(model, signals)
-    savepath = "tmp/tmp.png"
+    savepath = "tmp/ecg-ae-reconstruction.png"
+    plt.tight_layout()
+    plt.savefig(savepath)
+    print("Saved an image!", savepath)
+
+    autoeecgcoder_evals.draw_interpolation_tower(model, signals, 32)
+    savepath = "tmp/ecg-ae-interpolation.png"
     plt.tight_layout()
     plt.savefig(savepath)
     print("Saved an image!", savepath)
