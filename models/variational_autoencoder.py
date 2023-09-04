@@ -7,17 +7,17 @@ from models.layers import CNN_Decoder, CNN_Encoder
 
 
 class VariationalAutoencoder(nn.Module):
-    def __init__(self, output_size: int, embedding_size: int, input_size: tuple):
+    def __init__(self, encoder_output_size: int, embedding_size: int, input_size: tuple):
         super(VariationalAutoencoder, self).__init__()
         self.input_size = input_size
 
         # Encoder output size
-        self.output_size = output_size
-        self.encoder = CNN_Encoder(output_size=output_size, input_size=input_size)
+        self.encoder_output_size = encoder_output_size
+        self.encoder = CNN_Encoder(output_size=encoder_output_size, input_size=input_size)
 
         # From encoder to embedding
-        self.var = nn.Linear(output_size, embedding_size)
-        self.mu = nn.Linear(output_size, embedding_size)
+        self.var = nn.Linear(encoder_output_size, embedding_size)
+        self.mu = nn.Linear(encoder_output_size, embedding_size)
         self.decoder = CNN_Decoder(embedding_size, input_size=input_size)
 
     def encode(self, x):
