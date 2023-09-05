@@ -49,6 +49,12 @@ def train(cfg: DictConfig) -> nn.Module:
             loss.backward()
             optimizer.step()
 
+            gradients = {}
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    gradients[f"gradients/{name}"] = param.grad.norm().item()
+            wandb.log(gradients, step=step)
+
             if step % cfg.train.log_interval == 0:
                 train_progress.set_postfix(loss=loss.item())
                 metrics = {f"train/{key}": value.item() for key, value in losses.items()}
@@ -105,7 +111,8 @@ def forward_step(
         data = data.unsqueeze(1)
 
     recon_batch, mu, logvar = model(data)
-    recon_loss = F.binary_cross_entropy(recon_batch, data, reduction="mean")
+    recon_loss = F.binary_cross_entropy(recon_batch, data, reduction="sum")
+
     KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
     loss = recon_loss + KLD
