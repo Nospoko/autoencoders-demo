@@ -113,7 +113,6 @@ def main(cfg: DictConfig):
     train_dataset, test_dataset = prepare_dataset(cfg)
 
     device = cfg.system.device
-    
     images = test_dataset[:20]["image"].to(device) / 255.0
 
     # Demo usage
