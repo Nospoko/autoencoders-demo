@@ -112,6 +112,7 @@ def forward_step(
 
     recon_batch, mu, logvar = model(data)
     recon_loss = F.binary_cross_entropy(recon_batch, data, reduction="sum")
+
     KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
     loss = recon_loss + KLD
