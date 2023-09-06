@@ -3,7 +3,6 @@ train:
   epochs: 10
   log_interval: 50
   lr: 1e-4
-  loss_function: "VAE_MSE"
 
 model:
   type: "ECG_VAE"

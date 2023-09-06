@@ -2,12 +2,12 @@ import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
+import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 import wandb
 from utils.data_loader import prepare_dataset
-from utils.train_utils import prepare_loss_function
 from models.autoencoder_ecg import VariationalAutoencoderECG
 
 
@@ -25,7 +25,6 @@ def train(cfg: DictConfig) -> nn.Module:
     )
     model = model.to(device)
 
-    loss_fn = prepare_loss_function(loss_function_name=cfg.train.loss_function)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
     step = 0
@@ -41,8 +40,8 @@ def train(cfg: DictConfig) -> nn.Module:
             data = batch["signal"].to(device)
             optimizer.zero_grad()
 
-            recon_batch, mu, logvar = model(data)
-            loss = loss_fn(recon_batch, data, mu, logvar)
+            losses = forward_step(model, data)
+            loss = losses["loss"]
             loss.backward()
             optimizer.step()
 
@@ -50,7 +49,8 @@ def train(cfg: DictConfig) -> nn.Module:
 
             if step % cfg.train.log_interval == 0:
                 train_progress.set_postfix(loss=loss.item())
-                wandb.log({"train/loss": loss.item()}, step=step)
+                metrics = {f"train/{key}": value.item() for key, value in losses.items()}
+                wandb.log(metrics, step=step)
 
             step += 1
 
@@ -62,8 +62,8 @@ def train(cfg: DictConfig) -> nn.Module:
             test_progress = tqdm(enumerate(test_loader), total=len(test_loader), leave=False)
             for it, batch in test_progress:
                 data = batch["signal"].to(device)
-                recon_batch, mu, logvar = model(data)
-                loss = loss_fn(recon_batch, data, mu, logvar)
+                losses = forward_step(model, data)
+                loss = losses["loss"]
                 test_loss.append(loss.item())
 
         # Epoch summary
@@ -83,6 +83,27 @@ def train(cfg: DictConfig) -> nn.Module:
             best_test_loss = test_loss
 
     return model
+
+
+def forward_step(
+    model: nn.Module,
+    data: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    recon_batch, mu, logvar = model(data)
+
+    magic_factor = 0.1
+    recon_loss = magic_factor * F.mse_loss(recon_batch, data, reduction="sum")
+    KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+
+    loss = recon_loss + KLD
+
+    losses = {
+        "loss": loss,
+        "KLD": KLD,
+        "recon": recon_loss,
+    }
+
+    return losses
 
 
 def main(cfg: DictConfig):
