@@ -4,17 +4,19 @@ import torch.nn as nn
 from tqdm import tqdm
 import torch.nn.functional as F
 from omegaconf import DictConfig
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
 import wandb
 from utils.data_loader import prepare_dataset
+from pipeline.vae_ecg import evals as vae_ecg_evals
 from models.autoencoder_ecg import VariationalAutoencoderECG
 
 
 def train(cfg: DictConfig) -> nn.Module:
     train_dataset, test_dataset = prepare_dataset(cfg)
-    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=cfg.train.batch_size, shuffle=True, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=8)
 
     device = cfg.system.device
     input_size = train_dataset.input_size
@@ -26,6 +28,8 @@ def train(cfg: DictConfig) -> nn.Module:
     model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
+
+    beta = cfg.train.kl_weight
 
     step = 0
     best_test_loss = float("inf")
@@ -40,7 +44,7 @@ def train(cfg: DictConfig) -> nn.Module:
             data = batch["signal"].to(device)
             optimizer.zero_grad()
 
-            losses = forward_step(model, data)
+            losses = forward_step(model=model, data=data, beta=beta)
             loss = losses["loss"]
             loss.backward()
             optimizer.step()
@@ -62,7 +66,7 @@ def train(cfg: DictConfig) -> nn.Module:
             test_progress = tqdm(enumerate(test_loader), total=len(test_loader), leave=False)
             for it, batch in test_progress:
                 data = batch["signal"].to(device)
-                losses = forward_step(model, data)
+                losses = forward_step(model=model, data=data, beta=beta)
                 loss = losses["loss"]
                 test_loss.append(loss.item())
 
@@ -88,14 +92,15 @@ def train(cfg: DictConfig) -> nn.Module:
 def forward_step(
     model: nn.Module,
     data: torch.Tensor,
+    beta: float,
 ) -> dict[str, torch.Tensor]:
     recon_batch, mu, logvar = model(data)
 
     magic_factor = 0.1
-    recon_loss = magic_factor * F.mse_loss(recon_batch, data, reduction="sum")
+    recon_loss = magic_factor * F.mse_loss(recon_batch, data, reduction="mean")
     KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
-    loss = recon_loss + KLD
+    loss = recon_loss + beta * KLD
 
     losses = {
         "loss": loss,
@@ -107,4 +112,26 @@ def forward_step(
 
 
 def main(cfg: DictConfig):
-    _ = train(cfg)
+    model = train(cfg)
+    model.eval()
+
+    # Data prep
+    train_dataset, test_dataset = prepare_dataset(cfg)
+    device = cfg.system.device
+    n_samples = 16
+    idxs = np.random.randint(len(test_dataset), size=n_samples)
+    signals = test_dataset[idxs]["signal"].to(device)
+
+    # Process
+    reconstructions, mu, logvar = model(signals)
+
+    # Review reconstructions
+    vae_ecg_evals.draw_ecg_reconstructions(signals, reconstructions)
+    savepath = "tmp/vae-ecg-reconstruction.png"
+    plt.savefig(savepath)
+    print("Saved an image!", savepath)
+
+    # Review embedding based interpolations
+    vae_ecg_evals.draw_interpolation_tower(model, signals, 16)
+    savepath = "tmp/vae-ecg-interpolation.png"
+    plt.savefig(savepath)

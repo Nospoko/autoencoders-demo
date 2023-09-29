@@ -25,6 +25,7 @@ def draw_ecg_reconstructions(
         right_ax.plot(reconstructions[it][1], label="reconstruction")
         right_ax.legend()
 
+    plt.tight_layout()
     return fig
 
 
@@ -65,3 +66,5 @@ def draw_interpolation_tower(model: nn.Module, signals: torch.Tensor, num_interp
         right_ax.plot(signal[1])
         right_ax.set_xlim(0, 1000)
         right_ax.xaxis.set_visible(False)
+
+    plt.tight_layout()
