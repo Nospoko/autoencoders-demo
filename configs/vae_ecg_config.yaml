@@ -4,6 +4,7 @@ train:
   log_interval: 50
   lr: 1e-4
   kl_weight: 1e-5
+  recon_weight: 0.1
 
 model:
   type: "ECG_VAE"

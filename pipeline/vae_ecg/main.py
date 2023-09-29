@@ -35,8 +35,6 @@ def train(cfg: DictConfig) -> nn.Module:
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.train.lr)
 
-    beta = cfg.train.kl_weight
-
     step = 0
     best_test_loss = float("inf")
     epoch_progress = tqdm(range(cfg.train.epochs))
@@ -50,7 +48,12 @@ def train(cfg: DictConfig) -> nn.Module:
             data = batch["signal"].to(device)
             optimizer.zero_grad()
 
-            losses = forward_step(model=model, data=data, beta=beta)
+            losses = forward_step(
+                model=model,
+                data=data,
+                kl_weight=cfg.train.kl_weight,
+                recon_weight=cfg.train.recon_weight,
+            )
             loss = losses["loss"]
             loss.backward()
             optimizer.step()
@@ -72,7 +75,12 @@ def train(cfg: DictConfig) -> nn.Module:
             test_progress = tqdm(enumerate(test_loader), total=len(test_loader), leave=False)
             for it, batch in test_progress:
                 data = batch["signal"].to(device)
-                losses = forward_step(model=model, data=data, beta=beta)
+                losses = forward_step(
+                    model=model,
+                    data=data,
+                    kl_weight=cfg.train.kl_weight,
+                    recon_weight=cfg.train.recon_weight,
+                )
                 loss = losses["loss"]
                 test_loss.append(loss.item())
 
@@ -101,20 +109,15 @@ def train(cfg: DictConfig) -> nn.Module:
     return model
 
 
-def forward_step(
-    model: nn.Module,
-    data: torch.Tensor,
-    beta: float,
-) -> dict[str, torch.Tensor]:
+def forward_step(model: nn.Module, data: torch.Tensor, kl_weight: float, recon_weight: float) -> dict[str, torch.Tensor]:
     recon_batch, mu, logvar = model(data)
+
+    recon_loss = F.mse_loss(recon_batch, data, reduction="mean")
+    KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 
     # Balance between reconstruction loss and KLD is a hyperparameter
     # See: https://github.com/Nospoko/autoencoders-demo/pull/7
-    magic_factor = 0.1
-    recon_loss = magic_factor * F.mse_loss(recon_batch, data, reduction="mean")
-    KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-
-    loss = recon_loss + beta * KLD
+    loss = recon_weight * recon_loss + kl_weight * KLD
 
     losses = {
         "loss": loss,
