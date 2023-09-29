@@ -16,6 +16,12 @@ class SizedDataset(Dataset):
         # I don't like this but what can you do
         self.data_key = "image" if len(input_size) == 3 else "signal"
 
+    def __rich_repr__(self):
+        yield "SizedDataset"
+        yield "data_key", self.data_key
+        yield "input_size", self.input_size
+        yield "n_samples", len(self)
+
     @property
     def n_channels(self) -> int:
         return self.input_size[0]
