@@ -3,9 +3,9 @@ import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 import torch.nn.functional as F
-from omegaconf import DictConfig
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
+from omegaconf import OmegaConf, DictConfig
 
 import wandb
 from utils.data_loader import prepare_dataset
@@ -19,6 +19,12 @@ def train(cfg: DictConfig) -> nn.Module:
     test_loader = DataLoader(test_dataset, batch_size=cfg.train.batch_size, shuffle=False, num_workers=8)
 
     device = cfg.system.device
+
+    # Fixed samples for visualization
+    n_samples = 5
+    idxs = np.random.randint(len(test_dataset), size=n_samples)
+    fixed_validation_signals = test_dataset[idxs]["signal"].to(device)
+
     input_size = train_dataset.input_size
     model = VariationalAutoencoderECG(
         encoder_output_size=cfg.model.encoder_output_size,
@@ -70,6 +76,11 @@ def train(cfg: DictConfig) -> nn.Module:
                 loss = losses["loss"]
                 test_loss.append(loss.item())
 
+            # Review reconstructions
+            reconstructions, mu, logvar = model(fixed_validation_signals)
+            fig = vae_ecg_evals.draw_ecg_reconstructions(fixed_validation_signals, reconstructions)
+            wandb.log({"test/reconstruction": wandb.Image(fig)}, step=step)
+
         # Epoch summary
         test_loss = np.mean(test_loss)
         train_loss = np.mean(train_loss)
@@ -80,7 +91,8 @@ def train(cfg: DictConfig) -> nn.Module:
             checkpoint = {
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "config": cfg,
+                "config": OmegaConf.to_object(cfg),
+                "test_loss": test_loss,
             }
             checkpoint_path = "{}/{}.pt".format(cfg.checkpoint_path, cfg.run_name)
             torch.save(checkpoint, checkpoint_path)
@@ -96,6 +108,8 @@ def forward_step(
 ) -> dict[str, torch.Tensor]:
     recon_batch, mu, logvar = model(data)
 
+    # Balance between reconstruction loss and KLD is a hyperparameter
+    # See: https://github.com/Nospoko/autoencoders-demo/pull/7
     magic_factor = 0.1
     recon_loss = magic_factor * F.mse_loss(recon_batch, data, reduction="mean")
     KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
@@ -116,7 +130,7 @@ def main(cfg: DictConfig):
     model.eval()
 
     # Data prep
-    train_dataset, test_dataset = prepare_dataset(cfg)
+    _, test_dataset = prepare_dataset(cfg)
     device = cfg.system.device
     n_samples = 16
     idxs = np.random.randint(len(test_dataset), size=n_samples)
